@@ -8,7 +8,7 @@
 */
 
 // 替換成你「新」Google Apps Script 的 /exec 網址
-const GAS_URL = "PASTE_YOUR_NEW_GAS_EXEC_URL_HERE";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxVswrdmiv0CjmI2Na13dEFDGKIjjB-Sb3pG57Nj6j_hf3blMEWenCUoFn2rsLNsQXx/exec";
 
 const APP_ID = "plusplus-world-v1";
 const $ = id => document.getElementById(id);
