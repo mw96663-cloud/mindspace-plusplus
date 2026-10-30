@@ -5,7 +5,7 @@
  */
 
 // ★ 填入你的 Google Apps Script /exec 網址
-const GAS_URL = "PASTE_YOUR_GAS_EXEC_URL_HERE";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxVswrdmiv0CjmI2Na13dEFDGKIjjB-Sb3pG57Nj6j_hf3blMEWenCUoFn2rsLNsQXx/exec";
 
 const APP_ID = "plusplus-layered-v3";
 const $ = id => document.getElementById(id);
