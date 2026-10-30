@@ -1,251 +1,474 @@
 
-"use strict";
+/**
+ * Plus-Plus AI Director v2
+ *
+ * 負責將 AI 的 JSON 決策
+ * 轉換為真實的 p5.js 世界操作。
+ */
 
-/*
-  PLUS-PLUS WORLD — AI DIRECTOR V1
+window.PPDirector = (() => {
+  "use strict";
 
-  AI 決定創意內容。
-  這個檔案只負責將結構化操作執行出來。
-*/
+  const MOVEMENTS = [
+    "float",
+    "walk",
+    "fly",
+    "swim",
+    "bounce",
+    "glide"
+  ];
 
-const Director = {
-  handlers:{},
-  working:false
-};
+  const EFFECTS = [
+    "sparkle",
+    "snow",
+    "leaves",
+    "bubbles",
+    "fireflies",
+    "fireworks",
+    "glow"
+  ];
 
-function directorHero(name) {
-  const text=String(name||"").trim();
-
-  return S.heroes.find(h=>h.name===text) ||
-    S.heroes.find(h=>h.id===text) ||
-    S.heroes.find(h=>h.id===S.selectedId) ||
-    S.heroes[0] ||
-    null;
-}
-
-function directorEffect(type,color="#fff1b0",count=40) {
-  startSceneEffect({type,color,count});
-}
-
-async function directorTransform(hero,description) {
-  if (!hero || !description) return;
-
-  status("🪄 正在改造 "+hero.name);
-
-  const result=await callAI("transform",{
-    image:hero.imageData,
-    description
-  },180000);
-
-  hero.image=await imageLoad(result.image);
-  hero.imageData=result.image;
-
-  directorEffect("sparkle","#fff1b0",35);
-}
-
-async function directorNewHero(item) {
-  const name=String(item.name||"新朋友").slice(0,40);
-  const description=String(item.description||name).slice(0,1000);
-
-  status("🧩 正在創造 "+name);
-
-  const result=await callAI("generateCharacter",{
-    description
-  },180000);
-
-  const hero={
-    id:uid(),
-    name,
-    description,
-    image:await imageLoad(result.image),
-    imageData:result.image,
-    originalImage:result.image,
-    movement:item.movement||"float",
-    skills:[],
-    x:.25+Math.random()*.5,
-    y:.55,
-    size:135,
-    phase:Math.random()*6.28,
-    direction:1,
-    speed:.00007,
-    created:performance.now(),
-    action:null
-  };
-
-  S.heroes.push(hero);
-  S.selectedId=hero.id;
-  updateHeroList();
-  directorEffect("sparkle","#f9e5a6",45);
-
-  return hero;
-}
-
-async function directorWorld(description) {
-  if (!description) return;
-
-  status("🌈 正在生成新的積木世界");
-
-  const result=await callAI("generateWorld",{
-    description
-  },180000);
-
-  await setWorldImage(result.image,"我的想像世界");
-  directorEffect("sparkle","#fff3b5",55);
-}
-
-Director.handlers.move=async function(action) {
-  const hero=directorHero(action.target);
-  if (!hero) return;
-
-  hero.action={
-    start:performance.now(),
-    duration:1800,
-    x:clamp(Number(action.x)||.5,.08,.92),
-    y:clamp(Number(action.y)||.5,.15,.85)
-  };
-};
-
-Director.handlers.movement=async function(action) {
-  const hero=directorHero(action.target);
-  if (!hero) return;
-
-  const allowed=new Set([
-    "walk","fly","swim","float","crawl","hop"
-  ]);
-
-  if (allowed.has(action.movement)) {
-    hero.movement=action.movement;
-    directorEffect("sparkle","#fff2ad",25);
-  }
-};
-
-Director.handlers.skill=async function(action) {
-  const hero=directorHero(action.target);
-  if (!hero) return;
-
-  const description=String(action.description||"").trim();
-  if (!description) return;
-
-  hero.skills.push({
-    name:description,
-    created:Date.now()
-  });
-
-  /*
-    技能可能包含外觀改造。
-    讓圖片 AI 依照描述加上對應積木部件。
-  */
-  await directorTransform(hero,description);
-
-  directorEffect(
-    action.effect||"sparkle",
-    "#ffe39b",45
-  );
-};
-
-Director.handlers.transform=async function(action) {
-  const hero=directorHero(action.target);
-  if (!hero) return;
-  await directorTransform(hero,action.description);
-};
-
-Director.handlers.changeWorld=async function(action,result) {
-  const description=result.worldPrompt ||
-    action.description;
-
-  await directorWorld(description);
-};
-
-Director.handlers.addCharacter=async function(action,result) {
-  /*
-    AI 可能一次要求多個新角色。
-    優先使用 newCharacters 的詳細造型描述。
-  */
-  const items=Array.isArray(result.newCharacters)
-    ?result.newCharacters:[];
-
-  if (items.length) {
-    for(const item of items.slice(0,3)) {
-      await directorNewHero(item);
-    }
-  } else if(action.description) {
-    await directorNewHero({
-      name:action.target||"新朋友",
-      description:action.description,
-      movement:action.movement||"float"
-    });
-  }
-};
-
-Director.handlers.effect=async function(action) {
-  directorEffect(
-    action.effect||"sparkle",
-    "#fff1b0",50
-  );
-};
-
-Director.handlers.speak=async function(action) {
-  const hero=directorHero(action.target);
-  const text=String(action.description||"").slice(0,200);
-  if(text)announce(hero?.name||"AI 夥伴",text);
-};
-
-async function applyDirector(result) {
-  if (!result || Director.working) return;
-
-  Director.working=true;
-
-  try {
-    const actions=Array.isArray(result.actions)
-      ?result.actions.slice(0,15):[];
-
-    const done=new Set();
-
-    for(const action of actions) {
-      if (!action || typeof action!=="object")continue;
-
-      const type=String(action.type||"");
-      const handler=Director.handlers[type];
-
-      if (typeof handler!=="function")continue;
-
-      /*
-        同一回合避免同一個背景或新增角色請求
-        被重複執行。
-      */
-      if (
-        (type==="changeWorld" || type==="addCharacter") &&
-        done.has(type)
-      ) continue;
-
-      await handler(action,result);
-      done.add(type);
+  function findHero(name) {
+    if (!S.heroes.length) {
+      return null;
     }
 
-    /*
-      即使 AI 忘記列出 addCharacter 操作，
-      但已提供 newCharacters，也能建立角色。
-    */
+    const target =
+      String(name || "").trim();
+
+    if (target) {
+      const exact = S.heroes.find(
+        h => h.name === target
+      );
+
+      if (exact) return exact;
+
+      const partial = S.heroes.find(
+        h =>
+          h.name.includes(target) ||
+          target.includes(h.name)
+      );
+
+      if (partial) return partial;
+    }
+
+    return getSelectedHero();
+  }
+
+  function safeMovement(value) {
+    return MOVEMENTS.includes(value)
+      ? value
+      : "float";
+  }
+
+  function safeEffect(value) {
+    return EFFECTS.includes(value)
+      ? value
+      : "sparkle";
+  }
+
+  function announce(reply, hero = null) {
+    if (!reply) return;
+
+    speak(reply, hero);
+  }
+
+  function changeMovement(
+    hero,
+    movement
+  ) {
+    if (!hero) return false;
+
+    hero.movement =
+      safeMovement(movement);
+
+    hero.phase =
+      Math.random() * Math.PI * 2;
+
+    if (hero.movement === "fly") {
+      hero.baseY = .42;
+    } else if (hero.movement === "swim") {
+      hero.baseY = .62;
+    } else if (hero.movement === "walk") {
+      hero.baseY = .77;
+    } else if (hero.movement === "bounce") {
+      hero.baseY = .7;
+    } else {
+      hero.baseY = .65;
+    }
+
+    hero.y = hero.baseY;
+
+    updateCharacterList();
+
+    emitParticles(
+      hero.x * width,
+      hero.y * height,
+      35
+    );
+
+    return true;
+  }
+
+  function moveHero(hero) {
+    if (!hero) return false;
+
+    hero.direction *= -1;
+
+    hero.speedMultiplier =
+      Math.min(
+        2.2,
+        (hero.speedMultiplier || 1) + .3
+      );
+
+    emitParticles(
+      hero.x * width,
+      hero.y * height,
+      18
+    );
+
+    return true;
+  }
+
+  function changeSize(hero, size) {
+    if (!hero) return false;
+
+    const next = Number(size);
+
+    if (!Number.isFinite(next)) {
+      return false;
+    }
+
+    hero.scale = clamp(
+      next,
+      .5,
+      2
+    );
+
+    emitParticles(
+      hero.x * width,
+      hero.y * height,
+      30
+    );
+
+    return true;
+  }
+
+  function changeColor(hero, colorName) {
+    if (!hero) return false;
+
+    // 保留實體積木原始照片，不直接覆蓋像素顏色。
+    // 顏色變化先以周圍光點表現，
+    // 避免破壞實體作品的辨識度。
+    const colorMap = {
+      red: "#ff8b8b",
+      blue: "#91c8ff",
+      green: "#9de0b4",
+      yellow: "#ffe08b",
+      purple: "#c9b0ff",
+      pink: "#ffb7d5",
+      orange: "#ffc18c",
+      紅色: "#ff8b8b",
+      藍色: "#91c8ff",
+      綠色: "#9de0b4",
+      黃色: "#ffe08b",
+      紫色: "#c9b0ff",
+      粉紅色: "#ffb7d5",
+      橘色: "#ffc18c"
+    };
+
+    const selectedColor =
+      colorMap[colorName] ||
+      "#ffffff";
+
+    for (let i = 0; i < 45; i++) {
+      const angle =
+        Math.random() * Math.PI * 2;
+
+      const radius =
+        Math.random() * 80;
+
+      S.particles.push({
+        x:
+          hero.x * width +
+          Math.cos(angle) * radius,
+        y:
+          hero.y * height +
+          Math.sin(angle) * radius,
+        vx:
+          Math.cos(angle) *
+          (1 + Math.random() * 2),
+        vy:
+          Math.sin(angle) *
+          (1 + Math.random() * 2),
+        size: 5 + Math.random() * 9,
+        life: 1500,
+        maxLife: 1500,
+        color: selectedColor,
+        shape: "plus"
+      });
+    }
+
+    return true;
+  }
+
+  async function regenerateWorld(decision) {
+    const prompt = String(
+      decision.worldPrompt || ""
+    ).trim();
+
+    if (!prompt) {
+      throw new Error(
+        "AI 沒有提供新的背景描述"
+      );
+    }
+
+    const info = {
+      name:
+        decision.name ||
+        S.worldName,
+      description:
+        prompt,
+      worldName:
+        decision.name ||
+        "新的想像世界",
+      worldPrompt:
+        prompt
+    };
+
+    let result;
+
     if (
-      !done.has("addCharacter") &&
-      Array.isArray(result.newCharacters)
+      S.sceneOriginalData &&
+      S.creationImage &&
+      S.creationInfo?.kind ===
+        "environment"
     ) {
-      for(const item of result.newCharacters.slice(0,3)) {
-        await directorNewHero(item);
-      }
+      result = await callAI(
+        "generateScene",
+        {
+          image: S.creationImage,
+          info
+        },
+        180000
+      );
+    } else {
+      result = await callAI(
+        "generateWorld",
+        { info },
+        180000
+      );
     }
 
-    /*
-      AI 提供背景描述時，也可以獨立更新場景。
-    */
-    if (
-      !done.has("changeWorld") &&
-      result.worldPrompt
-    ) {
-      await directorWorld(result.worldPrompt);
-    }
+    await setWorldImage(
+      result.image,
+      info.worldName
+    );
 
-  } finally {
-    Director.working=false;
+    S.worldPrompt = prompt;
+
+    startSceneEffect(
+      safeEffect(
+        decision.effect
+      )
+    );
   }
-}
+
+  async function addCharacter(decision) {
+    const description = String(
+      decision.characterDescription ||
+      decision.name ||
+      "一隻友善的幻想生物"
+    );
+
+    const result = await callAI(
+      "generateCharacter",
+      { description },
+      180000
+    );
+
+    if (!result || !result.image) {
+      throw new Error(
+        "AI 沒有回傳新角色圖片"
+      );
+    }
+
+    const img =
+      await loadImageAsync(
+        result.image
+      );
+
+    const hero = {
+      id: uid(),
+
+      name:
+        decision.name ||
+        "新朋友",
+
+      description,
+      image: img,
+      imageData: result.image,
+
+      x: .3 + Math.random() * .4,
+      y: .65,
+      baseY: .65,
+
+      size: 240,
+      scale: 1,
+      direction: 1,
+
+      speed: .000075,
+      speedMultiplier: 1,
+
+      movement:
+        safeMovement(
+          decision.movement
+        ),
+
+      phase:
+        Math.random() *
+        Math.PI * 2,
+
+      entering: false,
+      speech: "",
+      speechUntil: 0,
+
+      created:
+        performance.now()
+    };
+
+    S.heroes.push(hero);
+    S.selectedId = hero.id;
+
+    updateCharacterList();
+
+    emitParticles(
+      hero.x * width,
+      hero.y * height,
+      60
+    );
+
+    return hero;
+  }
+
+  async function execute(decision) {
+    if (
+      !decision ||
+      typeof decision !== "object"
+    ) {
+      throw new Error(
+        "AI 導演沒有回傳有效指令"
+      );
+    }
+
+    const action =
+      String(
+        decision.action || "none"
+      );
+
+    const hero = findHero(
+      decision.target
+    );
+
+    let speakingHero = hero;
+    let completed = false;
+
+    switch (action) {
+      case "move":
+        completed = moveHero(hero);
+        break;
+
+      case "changeMovement":
+        completed = changeMovement(
+          hero,
+          decision.movement
+        );
+        break;
+
+      case "effect":
+        startSceneEffect(
+          safeEffect(
+            decision.effect
+          )
+        );
+        completed = true;
+        break;
+
+      case "regenerateWorld":
+        await regenerateWorld(
+          decision
+        );
+        completed = true;
+        break;
+
+      case "changeWorldName":
+        if (decision.name) {
+          S.worldName =
+            String(decision.name);
+
+          $("worldTitle").textContent =
+            "✨ " + S.worldName;
+
+          completed = true;
+        }
+        break;
+
+      case "addCharacter":
+        speakingHero =
+          await addCharacter(
+            decision
+          );
+
+        completed = true;
+        break;
+
+      case "changeSize":
+        completed = changeSize(
+          hero,
+          decision.size
+        );
+        break;
+
+      case "changeColor":
+        completed = changeColor(
+          hero,
+          decision.color
+        );
+        break;
+
+      case "none":
+      default:
+        completed = true;
+        break;
+    }
+
+    const reply = String(
+      decision.reply || ""
+    ).trim();
+
+    if (!completed) {
+      announce(
+        "我聽到你的想法了，" +
+        "但目前還沒有可以操作的角色。" +
+        "我們可以先拍一張積木照片！"
+      );
+
+      return;
+    }
+
+    announce(
+      reply ||
+      "好呀！我們再一起看看這個世界會怎麼變化。",
+      speakingHero
+    );
+  }
+
+  return {
+    execute,
+    findHero,
+    changeMovement,
+    moveHero,
+    changeSize,
+    addCharacter
+  };
+})();
