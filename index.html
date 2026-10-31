@@ -3,51 +3,253 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1">
   <title>Plus-Plus｜想像有形</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.11/p5.min.js"></script>
   <style>
-    *{box-sizing:border-box}
-    body{margin:0;font-family:"Noto Sans TC",Arial,sans-serif;background:#e5eff2;color:#35465b;overflow:hidden}
-    #world{position:fixed;inset:0;z-index:0}
-    .top{position:fixed;top:16px;left:16px;right:16px;z-index:5;display:flex;justify-content:space-between;gap:12px;pointer-events:none}
-    .pill,.panel,.modalBox,.introBox{background:#ffffffed;border:1px solid #fff;border-radius:22px;box-shadow:0 8px 30px #46546a20}
-    .pill{padding:12px 18px;font-weight:700}
-    .top>*{pointer-events:auto}
-    button{font:inherit;cursor:pointer;border:0;background:#fff;color:#3c5265;border-radius:16px;padding:12px 16px;box-shadow:0 4px 15px #53647718}
-    button:disabled{opacity:.5;cursor:wait}
-    button:hover:not(:disabled){background:#eef7fb}
-    .dock{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:6;display:flex;gap:10px;background:#ffffffdf;padding:10px;border-radius:24px;box-shadow:0 10px 30px #40506625}
-    .dock button{font-size:22px;min-width:55px}
-    .dock button.listening{background:#ffc4cc}
-    .panel{position:fixed;right:16px;top:80px;bottom:100px;width:min(350px,calc(100vw - 32px));z-index:8;padding:20px;overflow:auto;display:none}
-    .panel.open{display:block}
-    .panel h2{font-size:18px;margin:0 0 14px}
-    .panel button{width:100%;text-align:left;margin:5px 0}
-    .heroBtn.active{background:#d7ecf9}
-    #status{white-space:pre-wrap;font-size:12px;line-height:1.7;background:#eef5f8;padding:12px;border-radius:12px;overflow-wrap:anywhere}
-    #heroList{display:flex;flex-direction:column;gap:6px}
-    #message{position:fixed;z-index:9;left:50%;top:90px;transform:translateX(-50%);max-width:min(650px,90vw);background:#ffffffed;border-radius:18px;padding:14px 22px;text-align:center;box-shadow:0 6px 25px #35475c24}
-    #message[hidden],#loading[hidden]{display:none}
-    .modal{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:#1b30468c;padding:16px}
-    .modal.open{display:flex}
-    .modalBox{padding:20px;width:min(580px,100%);text-align:center}
-    video{width:100%;max-height:58vh;object-fit:contain;background:#1e293b;border-radius:14px}
-    .modalActions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px}
-    .intro{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#e3f3f7,#fce8e3);padding:20px}
-    .introBox{max-width:520px;padding:38px;text-align:center}
-    .introBox h1{font-size:36px}
-    .primary{background:#bde5ed;font-weight:700}
-    iframe#bridge{position:absolute;width:0;height:0;border:0;opacity:0;pointer-events:none}
-    @media(max-width:600px){.dock{gap:4px;padding:6px}.dock button{min-width:44px;padding:10px;font-size:18px}.top{top:8px;left:8px;right:8px}.pill{font-size:13px;padding:10px}}
+    * { box-sizing:border-box; }
+    body {
+      margin:0;
+      font-family:"Noto Sans TC",system-ui,sans-serif;
+      color:#344354;
+      background:#eaf5f5;
+      overflow:hidden;
+    }
+    button,input,textarea { font:inherit; }
+    button {
+      border:0;
+      border-radius:14px;
+      padding:11px 15px;
+      cursor:pointer;
+      background:#fff;
+      color:#344354;
+      box-shadow:0 3px 12px #34435418;
+    }
+    button:hover { filter:brightness(.96); }
+    button:disabled { opacity:.5;cursor:not-allowed; }
+    button.primary {
+      background:#7964d9;
+      color:white;
+    }
+    #world {
+      position:fixed;
+      inset:0;
+      z-index:0;
+    }
+    #world canvas { display:block; }
+    #topbar {
+      position:fixed;
+      top:16px;
+      left:16px;
+      right:16px;
+      z-index:10;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      pointer-events:none;
+    }
+    #topbar > * { pointer-events:auto; }
+    #worldTitle {
+      background:#ffffffd9;
+      backdrop-filter:blur(12px);
+      padding:13px 18px;
+      border-radius:20px;
+      font-weight:800;
+      max-width:50vw;
+    }
+    .toolbar {
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    #bottomBar {
+      position:fixed;
+      left:50%;
+      bottom:22px;
+      transform:translateX(-50%);
+      z-index:10;
+      display:flex;
+      gap:10px;
+      padding:10px;
+      border-radius:24px;
+      background:#ffffffdb;
+      backdrop-filter:blur(14px);
+      box-shadow:0 8px 28px #26334a20;
+    }
+    #mic.listening {
+      background:#fa7b8e;
+      color:white;
+    }
+    #panel {
+      position:fixed;
+      z-index:15;
+      top:0;
+      right:0;
+      height:100dvh;
+      width:min(390px,100vw);
+      background:#fffffff2;
+      backdrop-filter:blur(20px);
+      box-shadow:-8px 0 30px #25364a22;
+      transform:translateX(105%);
+      transition:transform .25s;
+      padding:22px;
+      overflow:auto;
+    }
+    #panel.open { transform:translateX(0); }
+    #panelHeader {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+    }
+    #status {
+      white-space:pre-wrap;
+      background:#f0f3fa;
+      border-radius:14px;
+      padding:14px;
+      font-size:13px;
+      line-height:1.7;
+      overflow-wrap:anywhere;
+    }
+    #heroList {
+      display:grid;
+      gap:8px;
+      margin:12px 0;
+    }
+    .heroBtn {
+      text-align:left;
+      width:100%;
+    }
+    .heroBtn.active {
+      background:#e8e0ff;
+    }
+    #chatInput {
+      width:100%;
+      resize:vertical;
+      border:1px solid #d7d9e5;
+      border-radius:12px;
+      padding:12px;
+      min-height:75px;
+    }
+    #message {
+      position:fixed;
+      z-index:11;
+      left:50%;
+      top:85px;
+      transform:translateX(-50%);
+      max-width:min(600px,90vw);
+      background:#ffffffed;
+      border-radius:17px;
+      padding:13px 20px;
+      box-shadow:0 6px 25px #283b4820;
+      text-align:center;
+    }
+    #message[hidden],#loading[hidden] {
+      display:none;
+    }
+    .modal {
+      display:none;
+      position:fixed;
+      inset:0;
+      z-index:30;
+      background:#1e2636b8;
+      padding:20px;
+      align-items:center;
+      justify-content:center;
+    }
+    .modal.open { display:flex; }
+    .modalCard {
+      background:white;
+      width:min(780px,100%);
+      max-height:94dvh;
+      overflow:auto;
+      padding:22px;
+      border-radius:24px;
+    }
+    #video {
+      display:block;
+      width:100%;
+      max-height:58dvh;
+      background:#18212d;
+      border-radius:15px;
+      object-fit:contain;
+    }
+    #editCanvas {
+      display:block;
+      max-width:100%;
+      max-height:55dvh;
+      margin:auto;
+      background-color:#fff;
+      background-image:
+        linear-gradient(45deg,#ddd 25%,transparent 25%),
+        linear-gradient(-45deg,#ddd 25%,transparent 25%),
+        linear-gradient(45deg,transparent 75%,#ddd 75%),
+        linear-gradient(-45deg,transparent 75%,#ddd 75%);
+      background-size:18px 18px;
+      background-position:0 0,0 9px,9px -9px,-9px 0;
+      touch-action:none;
+      cursor:crosshair;
+    }
+    .modalActions {
+      display:flex;
+      flex-wrap:wrap;
+      gap:9px;
+      margin-top:15px;
+    }
+    #intro {
+      position:fixed;
+      inset:0;
+      z-index:40;
+      background:#eaf5f5eF;
+      display:grid;
+      place-items:center;
+      text-align:center;
+      padding:25px;
+    }
+    #introContent {
+      max-width:540px;
+    }
+    #intro h1 {
+      font-size:clamp(34px,5vw,64px);
+      margin:0 0 12px;
+    }
+    #intro p {
+      line-height:1.9;
+      margin-bottom:24px;
+    }
+    #bridge {
+      position:absolute;
+      width:1px;
+      height:1px;
+      opacity:0;
+      pointer-events:none;
+      border:0;
+    }
+    @media(max-width:640px) {
+      #topbar { top:10px;left:10px;right:10px; }
+      #worldTitle { font-size:13px;padding:10px; }
+      .toolbar button { padding:9px; }
+      #bottomBar {
+        width:calc(100% - 20px);
+        justify-content:center;
+        bottom:10px;
+      }
+      #bottomBar button { flex:1;padding:10px 5px; }
+    }
   </style>
 </head>
 <body>
   <div id="world"></div>
 
-  <div class="top">
-    <div class="pill" id="worldTitle">Plus-Plus｜想像有形</div>
-    <button id="panelToggle">☰ 工作台</button>
+  <div id="topbar">
+    <div id="worldTitle">🧩 Plus-Plus｜想像有形</div>
+    <div class="toolbar">
+      <button id="sound">🔊</button>
+      <button id="fullscreen">⛶ 全螢幕</button>
+      <button id="more">☰ 工作台</button>
+    </div>
   </div>
 
   <div id="message" hidden>
@@ -55,53 +257,106 @@
     <span id="messageText"></span>
   </div>
 
-  <div class="dock">
-    <button id="photo" title="拍照">📷</button>
-    <button id="mic" title="語音">🎤</button>
-    <button id="sound" title="聲音">🔊</button>
-    <button id="more" title="工作台">🧩</button>
-    <button id="fullscreen" title="全螢幕">⛶</button>
+  <div id="bottomBar">
+    <button id="photo" class="primary">📷 拍照</button>
+    <button id="upload">🖼️ 上傳</button>
+    <button id="mic">🎤 語音</button>
   </div>
 
-  <aside class="panel" id="panel">
-    <h2>🧩 Plus-Plus 創作工作台</h2>
-    <button id="test">🔌 測試 AI 連線</button>
-    <button id="upload">🖼️ 選擇積木照片</button>
-    <button id="retry">🌈 重新生成世界</button>
-    <button id="clear">🗑️ 清空世界</button>
-    <h2 style="margin-top:20px">角色</h2>
+  <aside id="panel">
+    <div id="panelHeader">
+      <h2>🧩 創作工作台</h2>
+      <button id="panelToggle">✕</button>
+    </div>
+
+    <h3>系統狀態</h3>
+    <div id="status">正在啟動……</div>
+
+    <div class="modalActions">
+      <button id="test">🔌 測試 AI 連線</button>
+      <button id="reconnect">🔄 重新連線</button>
+    </div>
+
+    <h3>我的角色</h3>
     <div id="heroList">尚未加入角色</div>
-    <h2 style="margin-top:20px">系統狀態</h2>
-    <div id="status">準備中</div>
+
+    <h3>文字指令</h3>
+    <textarea id="chatInput"
+      placeholder="例如：幫我的積木魚加上紫色翅膀，然後讓牠飛起來"></textarea>
+    <div class="modalActions">
+      <button id="sendText" class="primary">
+        ✨ 送出想像
+      </button>
+    </div>
+
+    <h3>世界管理</h3>
+    <div class="modalActions">
+      <button id="retry">🌈 重做背景</button>
+      <button id="clear">🗑️ 清空世界</button>
+    </div>
   </aside>
 
-  <div class="modal" id="cameraModal">
-    <div class="modalBox">
-      <h2>📷 拍攝你的 Plus-Plus 作品</h2>
-      <video id="video" autoplay muted playsinline></video>
+  <div id="cameraModal" class="modal">
+    <div class="modalCard">
+      <h2>📷 拍攝 Plus-Plus 積木</h2>
+      <video id="video" autoplay playsinline muted></video>
       <div class="modalActions">
-        <button id="capture" class="primary">拍攝作品</button>
+        <button id="capture" class="primary">📸 拍攝</button>
+        <button id="cameraUpload">🖼️ 選擇照片</button>
         <button id="closeCamera">關閉</button>
-        <button id="upload">選擇照片</button>
       </div>
     </div>
   </div>
 
-  <div class="intro" id="intro">
-    <div class="introBox">
-      <h1>🧩 想像有形</h1>
-      <p>拼出自己的 Plus-Plus 作品，讓積木走進想像世界。</p>
-      <p>拍照、探索，再用聲音為作品增加新的可能。</p>
-      <button class="primary" id="begin">開始創作 ✨</button>
+  <div id="editorModal" class="modal">
+    <div class="modalCard">
+      <h2>✂️ 作品去背與修整</h2>
+      <p>可先用 AI 去背，再用擦除、還原筆刷修整原始積木。</p>
+      <canvas id="editCanvas"></canvas>
+      <div class="modalActions">
+        <button id="removeBgAI">✨ AI 去背</button>
+        <button id="quickBg">⚡ 快速去背</button>
+        <button id="eraseMode">🧽 擦除</button>
+        <button id="restoreMode">🖌️ 還原</button>
+        <button id="undoEdit">↶ 復原</button>
+        <button id="resetEdit">重設</button>
+      </div>
+      <p>
+        筆刷大小：
+        <input id="brushSize" type="range"
+               min="8" max="90" value="28">
+      </p>
+      <div class="modalActions">
+        <button id="saveCreation" class="primary">
+          🧩 放進世界
+        </button>
+        <button id="cancelEditor">取消</button>
+      </div>
     </div>
   </div>
 
-  <input id="file" type="file" accept="image/*" hidden>
+  <input id="file" type="file"
+         accept="image/*" hidden>
 
-  <!-- 一評同樣的 iframe Bridge -->
-  <iframe id="bridge" title="GAS AI Bridge"></iframe>
+  <div id="intro">
+    <div id="introContent">
+      <h1>🧩 想像有形</h1>
+      <h2>Plus-Plus Interactive World</h2>
+      <p>
+        拼出你的作品、拍下它，
+        讓它走進你創造的世界。<br>
+        你可以透過語音增加造型、創造朋友、
+        改變環境，讓想像繼續生長。
+      </p>
+      <button id="begin" class="primary">
+        ✨ 開始創作
+      </button>
+    </div>
+  </div>
 
-  <script src="sketch.js"></script>
-  <script src="ai-director.js"></script>
+  <iframe id="bridge" title="AI Bridge"></iframe>
+
+  <script src="./sketch.js?v=20261031-2"></script>
+  <script src="./ai-director.js?v=20261031-2"></script>
 </body>
 </html>
