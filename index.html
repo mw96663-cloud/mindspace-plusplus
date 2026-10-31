@@ -13,6 +13,28 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js"></script>
 
+/* 二評工作台捲動修正 */
+
+#sidebar {
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  bottom: auto !important;
+
+  overflow-x: hidden !important;
+  overflow-y: scroll !important;
+
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+
+  padding-bottom: 130px !important;
+  touch-action: pan-y;
+}
+
+#sidebar.is-open {
+  pointer-events: auto !important;
+}
+
   <style>
     :root {
       --pink: #ff8ab5;
