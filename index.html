@@ -2,190 +2,106 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Plus-Plus｜想像有形</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js"></script>
-<style>
-:root{
-  --ink:#415266;--mint:#d9f0e7;--pink:#ffe5dc;
-  --yellow:#fff1c9;--purple:#e9e3fb;
-}
-*{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;
-  font-family:"Microsoft JhengHei",system-ui,sans-serif;
-  color:var(--ink);background:#e5f1f4}
-button,input{font:inherit}
-button{cursor:pointer}
-#world{position:fixed;inset:0}
-#world canvas{display:block}
-header{position:fixed;z-index:10;top:16px;left:18px;
-  right:18px;display:flex;justify-content:space-between;
-  align-items:flex-start;pointer-events:none}
-.brand,.roundTop{pointer-events:auto;background:#ffffffd9;
-  backdrop-filter:blur(15px);box-shadow:0 8px 28px #35475b20}
-.brand{border-radius:19px;padding:12px 17px}
-.brand strong{display:block;font-size:18px}
-.brand small{color:#7a8997}
-.topButtons{display:flex;gap:8px}
-.roundTop{border:0;width:46px;height:46px;
-  border-radius:15px;font-size:22px}
-#message{position:fixed;z-index:20;top:96px;left:50%;
-  transform:translateX(-50%);width:min(470px,92vw);
-  padding:15px 18px;border-radius:20px;background:#ffffffeb;
-  box-shadow:0 10px 35px #34465c20;text-align:center;
-  line-height:1.7}
-#message[hidden]{display:none}
-.loader{height:5px;border-radius:9px;background:#e5eeed;
-  margin-top:10px;overflow:hidden}
-.loader:after{content:"";display:block;height:100%;width:35%;
-  background:#88cdb5;animation:slide 1.2s ease-in-out infinite alternate}
-@keyframes slide{from{transform:translateX(-10%)}
-  to{transform:translateX(230%)}}
-.dock{position:fixed;z-index:20;bottom:22px;left:50%;
-  transform:translateX(-50%);display:flex;gap:12px;
-  background:#ffffffb9;backdrop-filter:blur(18px);
-  padding:12px;border-radius:100px;
-  box-shadow:0 10px 35px #34465c24}
-.bubble{width:58px;height:58px;border:0;border-radius:50%;
-  font-size:24px;transition:transform .2s}
-.bubble:hover{transform:translateY(-3px)}
-.bubble:disabled{opacity:.45}
-#photo{background:var(--pink)}
-#mic{background:var(--mint)}
-#sound{background:var(--yellow)}
-#more{background:var(--purple)}
-.listening{outline:5px solid #9de3c1;animation:pulse 1s infinite alternate}
-@keyframes pulse{to{outline-offset:10px;outline-color:transparent}}
-#panel{position:fixed;z-index:30;right:16px;top:76px;
-  bottom:108px;width:min(365px,calc(100vw - 32px));
-  padding:20px;border-radius:24px;background:#ffffffed;
-  backdrop-filter:blur(20px);overflow:auto;
-  box-shadow:0 12px 40px #34465c30;display:none}
-#panel.open{display:block}
-#panel h2{font-size:20px;margin:0 0 14px}
-#panel h3{font-size:15px;margin:22px 0 8px}
-.hint{font-size:13px;line-height:1.8;color:#718092}
-.panelBtn,.heroBtn{display:block;width:100%;padding:12px;
-  margin:7px 0;border:1px solid #e0e7e8;
-  border-radius:12px;background:#f7faf9;text-align:left;color:var(--ink)}
-.heroBtn.active{background:#e3f5eb;border-color:#a5d6bc}
-#status{padding:12px;border-radius:12px;background:#f2f6f6;
-  white-space:pre-wrap;word-break:break-word;font-size:12px;
-  line-height:1.8}
-#cameraModal{position:fixed;inset:0;z-index:60;
-  background:#263748c9;display:none;align-items:center;
-  justify-content:center;padding:15px}
-#cameraModal.open{display:flex}
-.cameraCard{width:min(680px,100%);padding:18px;
-  border-radius:24px;background:white}
-.cameraCard h2{margin:0 0 12px;font-size:19px}
-#video{width:100%;max-height:58vh;aspect-ratio:4/3;
-  object-fit:contain;background:#dfe9eb;border-radius:15px}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
-.actions button{flex:1;min-width:100px;border:0;
-  padding:14px;border-radius:12px;background:#eaf2ee}
-.actions button:first-child{background:#a9dfc9;font-weight:bold}
-#intro{position:fixed;inset:0;z-index:80;
-  display:grid;place-items:center;padding:20px;
-  background:radial-gradient(circle at 20% 20%,#ffe7d8,transparent 45%),
-  radial-gradient(circle at 80% 80%,#dce7ff,transparent 45%),#f1f8f5}
-.introCard{max-width:550px;text-align:center;
-  background:#ffffffd9;border-radius:28px;padding:45px 28px;
-  box-shadow:0 15px 45px #35475b20}
-.introCard h1{font-size:clamp(29px,5vw,42px)}
-.introCard p{line-height:2;color:#708092}
-#begin{border:0;background:#a9dfc9;border-radius:50px;
-  padding:16px 40px;font-size:18px;font-weight:bold}
-#bridge{display:none}
-@media(max-width:600px){
-  header{top:10px;left:10px;right:10px}
-  .brand{padding:10px}
-  .brand strong{font-size:15px}
-  #message{top:79px}
-  .dock{bottom:12px;gap:8px;padding:9px}
-  .bubble{width:52px;height:52px}
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Plus-Plus｜想像有形</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.11/p5.min.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"Noto Sans TC",Arial,sans-serif;background:#e5eff2;color:#35465b;overflow:hidden}
+    #world{position:fixed;inset:0;z-index:0}
+    .top{position:fixed;top:16px;left:16px;right:16px;z-index:5;display:flex;justify-content:space-between;gap:12px;pointer-events:none}
+    .pill,.panel,.modalBox,.introBox{background:#ffffffed;border:1px solid #fff;border-radius:22px;box-shadow:0 8px 30px #46546a20}
+    .pill{padding:12px 18px;font-weight:700}
+    .top>*{pointer-events:auto}
+    button{font:inherit;cursor:pointer;border:0;background:#fff;color:#3c5265;border-radius:16px;padding:12px 16px;box-shadow:0 4px 15px #53647718}
+    button:disabled{opacity:.5;cursor:wait}
+    button:hover:not(:disabled){background:#eef7fb}
+    .dock{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:6;display:flex;gap:10px;background:#ffffffdf;padding:10px;border-radius:24px;box-shadow:0 10px 30px #40506625}
+    .dock button{font-size:22px;min-width:55px}
+    .dock button.listening{background:#ffc4cc}
+    .panel{position:fixed;right:16px;top:80px;bottom:100px;width:min(350px,calc(100vw - 32px));z-index:8;padding:20px;overflow:auto;display:none}
+    .panel.open{display:block}
+    .panel h2{font-size:18px;margin:0 0 14px}
+    .panel button{width:100%;text-align:left;margin:5px 0}
+    .heroBtn.active{background:#d7ecf9}
+    #status{white-space:pre-wrap;font-size:12px;line-height:1.7;background:#eef5f8;padding:12px;border-radius:12px;overflow-wrap:anywhere}
+    #heroList{display:flex;flex-direction:column;gap:6px}
+    #message{position:fixed;z-index:9;left:50%;top:90px;transform:translateX(-50%);max-width:min(650px,90vw);background:#ffffffed;border-radius:18px;padding:14px 22px;text-align:center;box-shadow:0 6px 25px #35475c24}
+    #message[hidden],#loading[hidden]{display:none}
+    .modal{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:#1b30468c;padding:16px}
+    .modal.open{display:flex}
+    .modalBox{padding:20px;width:min(580px,100%);text-align:center}
+    video{width:100%;max-height:58vh;object-fit:contain;background:#1e293b;border-radius:14px}
+    .modalActions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px}
+    .intro{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#e3f3f7,#fce8e3);padding:20px}
+    .introBox{max-width:520px;padding:38px;text-align:center}
+    .introBox h1{font-size:36px}
+    .primary{background:#bde5ed;font-weight:700}
+    iframe#bridge{position:absolute;width:0;height:0;border:0;opacity:0;pointer-events:none}
+    @media(max-width:600px){.dock{gap:4px;padding:6px}.dock button{min-width:44px;padding:10px;font-size:18px}.top{top:8px;left:8px;right:8px}.pill{font-size:13px;padding:10px}}
+  </style>
 </head>
 <body>
+  <div id="world"></div>
 
-<div id="world"></div>
-
-<header>
-  <div class="brand">
-    <strong id="worldTitle">Plus-Plus｜想像有形</strong>
-    <small>讓手中的創作走進想像世界</small>
+  <div class="top">
+    <div class="pill" id="worldTitle">Plus-Plus｜想像有形</div>
+    <button id="panelToggle">☰ 工作台</button>
   </div>
-  <div class="topButtons">
-    <button class="roundTop" id="fullscreen" title="全螢幕">⛶</button>
-    <button class="roundTop" id="panelToggle" title="工作台">☰</button>
+
+  <div id="message" hidden>
+    <span id="loading" hidden>⏳ </span>
+    <span id="messageText"></span>
   </div>
-</header>
 
-<div id="message" hidden>
-  <div id="messageText"></div>
-  <div id="loading" class="loader" hidden></div>
-</div>
+  <div class="dock">
+    <button id="photo" title="拍照">📷</button>
+    <button id="mic" title="語音">🎤</button>
+    <button id="sound" title="聲音">🔊</button>
+    <button id="more" title="工作台">🧩</button>
+    <button id="fullscreen" title="全螢幕">⛶</button>
+  </div>
 
-<nav class="dock">
-  <button class="bubble" id="photo" title="拍照">📷</button>
-  <button class="bubble" id="mic" title="說話">🎤</button>
-  <button class="bubble" id="sound" title="聲音">🔊</button>
-  <button class="bubble" id="more" title="更多">✨</button>
-</nav>
+  <aside class="panel" id="panel">
+    <h2>🧩 Plus-Plus 創作工作台</h2>
+    <button id="test">🔌 測試 AI 連線</button>
+    <button id="upload">🖼️ 選擇積木照片</button>
+    <button id="retry">🌈 重新生成世界</button>
+    <button id="clear">🗑️ 清空世界</button>
+    <h2 style="margin-top:20px">角色</h2>
+    <div id="heroList">尚未加入角色</div>
+    <h2 style="margin-top:20px">系統狀態</h2>
+    <div id="status">準備中</div>
+  </aside>
 
-<aside id="panel">
-  <h2>我的想像工作台</h2>
-  <p class="hint">
-    拍攝 Plus-Plus 積木，讓作品進入世界。
-    也可以說「幫恐龍加翅膀」、「城堡旁邊加一棵樹」。
-  </p>
-  <button class="panelBtn" id="test">🔌 測試 AI 連線</button>
-  <button class="panelBtn" id="retry">🌈 重新生成背景</button>
-  <button class="panelBtn" id="clear">🧹 清空世界</button>
-
-  <h3>角色與造型</h3>
-  <div id="heroList">尚未加入角色</div>
-
-  <h3>系統狀態</h3>
-  <div id="status">尚未啟動</div>
-
-  <p class="hint">
-    原始角色永遠保留。語音新增的造型以獨立圖片圖層顯示。
-    建議用單色桌面拍照，提升去背品質。
-  </p>
-</aside>
-
-<div id="cameraModal">
-  <div class="cameraCard">
-    <h2>📷 拍攝積木作品</h2>
-    <video id="video" autoplay playsinline muted></video>
-    <div class="actions">
-      <button id="capture">拍照</button>
-      <button id="upload">選擇照片</button>
-      <button id="closeCamera">返回</button>
+  <div class="modal" id="cameraModal">
+    <div class="modalBox">
+      <h2>📷 拍攝你的 Plus-Plus 作品</h2>
+      <video id="video" autoplay muted playsinline></video>
+      <div class="modalActions">
+        <button id="capture" class="primary">拍攝作品</button>
+        <button id="closeCamera">關閉</button>
+        <button id="upload">選擇照片</button>
+      </div>
     </div>
-    <input type="file" id="file" accept="image/*" hidden>
   </div>
-</div>
 
-<section id="intro">
-  <div class="introCard">
-    <div style="font-size:52px">🌈 🧩 ✨</div>
-    <h1>Plus-Plus 想像有形</h1>
-    <p>
-      用積木拼出你的想像。<br>
-      拍照讓它走進會動的世界。<br>
-      再用說話，為角色增加翅膀、帽子或新能力。
-    </p>
-    <button id="begin">開始創作</button>
+  <div class="intro" id="intro">
+    <div class="introBox">
+      <h1>🧩 想像有形</h1>
+      <p>拼出自己的 Plus-Plus 作品，讓積木走進想像世界。</p>
+      <p>拍照、探索，再用聲音為作品增加新的可能。</p>
+      <button class="primary" id="begin">開始創作 ✨</button>
+    </div>
   </div>
-</section>
 
-<iframe id="bridge" title="AI Bridge"></iframe>
+  <input id="file" type="file" accept="image/*" hidden>
 
-<script src="ai-director.js"></script>
-<script src="sketch.js"></script>
+  <!-- 一評同樣的 iframe Bridge -->
+  <iframe id="bridge" title="GAS AI Bridge"></iframe>
+
+  <script src="sketch.js"></script>
+  <script src="ai-director.js"></script>
 </body>
 </html>
