@@ -8,7 +8,7 @@
 "use strict";
 
 const GAS_URL =
-  "https://script.google.com/macros/s/AKfycbwUooMD69_NMBhTzxf0Os_D6BEGb3QsGyhXpTGv09emRcG_4du219K4qO_FggY1vnLHOg/exec";
+  "https://script.google.com/macros/s/AKfycbxVswrdmiv0CjmI2Na13dEFDGKIjjB-Sb3pG57Nj6j_hf3blMEWenCUoFn2rsLNsQXx/exec";
 
 const APP_ID = "mindspace-v2";
 const $ = id => document.getElementById(id);
