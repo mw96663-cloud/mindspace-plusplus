@@ -1,436 +1,317 @@
 
 /**
- * Plus-Plus Layered AI Director v3
+ * Plus-Plus Layered AI Director
+ * Compatible with Mindspace V2 Bridge
  */
 
-window.PPDirector = (() => {
+window.PPDirector=(()=>{
   "use strict";
 
-  function getPlacement(value) {
-    return accessoryPlacement(value || "front");
-  }
-
-  function targetHero(decision) {
-    return findHero(String(decision.target || ""));
+  function targetHero(d) {
+    return findHero(String(d.target||""));
   }
 
   function movement(value) {
-    const allowed = [
-      "float", "walk", "fly",
-      "swim", "bounce", "glide"
+    const allowed=[
+      "float","walk","fly",
+      "swim","bounce","glide"
     ];
-
-    return allowed.includes(value) ? value : "float";
+    return allowed.includes(value)?value:"float";
   }
 
-  function setMovement(hero, value) {
-    if (!hero) return false;
+  function setMovement(hero,value) {
+    if(!hero)return false;
 
-    hero.movement = movement(value);
+    hero.movement=movement(value);
 
-    const y = {
-      fly: .42,
-      swim: .62,
-      walk: .76,
-      bounce: .7,
-      float: .65,
-      glide: .48
+    const positions={
+      fly:.42,
+      swim:.62,
+      walk:.76,
+      bounce:.70,
+      float:.65,
+      glide:.48
     };
 
-    hero.baseY = y[hero.movement];
-    hero.y = hero.baseY;
-
-    burst(hero.x * width, hero.y * height, 30);
+    hero.baseY=positions[hero.movement];
+    hero.y=hero.baseY;
+    burst(hero.x*width,hero.y*height,30);
     return true;
   }
 
-  /* ===================================
-     新增 Plus-Plus 造型圖層
-  =================================== */
+  async function addAccessory(d) {
+    const hero=targetHero(d);
 
-  async function addAccessory(decision) {
-    const hero = targetHero(decision);
-
-    if (!hero) {
-      throw new Error(
-        "目前沒有角色，請先拍攝積木角色。"
-      );
+    if(!hero) {
+      throw new Error("請先拍攝一個積木角色");
     }
 
-    const description = String(
-      decision.description ||
-      decision.name ||
+    const description=String(
+      d.description||d.name||
       "a colorful fantasy accessory"
     );
 
-    busy(
-      true,
-      "🧩 正在為「" + hero.name +
-      "」製作新的 Plus-Plus 積木造型……"
-    );
+    busy(true,"🧩 正在為「"+hero.name+"」新增造型……");
 
-    const result = await ai(
+    const result=await ai(
       "generateAccessory",
       {
         description,
-        originalDescription: hero.description
+        originalDescription:hero.description
       },
       180000
     );
 
-    const image = await loadPicture(result.image);
+    const img=await loadPicture(result.image);
+    const preset=accessoryPlacement(d.placement);
+    const name=String(d.name||"新造型");
 
-    const preset = getPlacement(
-      decision.placement
+    const isWing=/wing|翅膀|羽翼/i.test(
+      name+" "+description
     );
 
-    const name =
-      String(decision.name || "新造型");
-
-    const isWing =
-      /wing|翅膀|羽翼/i.test(
-        name + " " + description
-      );
-
-    const part = {
-      id: uid(),
+    hero.accessories.push({
+      id:uid(),
       name,
       description,
-      image,
-      imageData: result.image,
-
-      // 獨立圖層，不修改 hero.original
-      layer: preset.layer,
-      position: {
-        x: preset.position.x,
-        y: preset.position.y
+      image:img,
+      imageData:result.image,
+      layer:preset.layer,
+      position:{
+        x:preset.position.x,
+        y:preset.position.y
       },
-      scale: preset.scale,
-
-      animate: isWing ? "flap" : "none"
-    };
-
-    hero.accessories.push(part);
+      scale:preset.scale,
+      animate:isWing?"flap":"none"
+    });
 
     updateHeroList();
-
     burst(
-      hero.x * width,
-      hero.y * height,
-      65,
-      "#d8c4ff"
+      hero.x*width,
+      hero.y*height,
+      65,"#d8c4ff"
     );
-
     confirmSound();
 
-    // 若長輩同時說要飛起來，能力同步改變
-    if (
-      decision.movement === "fly" ||
-      (isWing &&
-       /fly|flying|飛/i.test(
-         String(decision.description || "") +
-         String(decision.reply || "")
-       ))
+    if(
+      d.movement==="fly"||
+      (isWing&&/fly|flying|飛/i.test(
+        String(d.description||"")+
+        String(d.reply||"")
+      ))
     ) {
-      setMovement(hero, "fly");
+      setMovement(hero,"fly");
     }
 
     return hero;
   }
 
-  /* ===================================
-     移除新增造型，不影響原始角色
-  =================================== */
+  function removeAccessory(d) {
+    const hero=targetHero(d);
+    if(!hero)return false;
 
-  function removeAccessory(decision) {
-    const hero = targetHero(decision);
+    const name=String(d.name||"").trim();
 
-    if (!hero) return false;
-
-    const name = String(decision.name || "").trim();
-
-    if (!name) {
-      const removed = hero.accessories.pop();
-
+    if(!name) {
+      const removed=hero.accessories.pop();
       updateHeroList();
-
       return !!removed;
     }
 
-    const index = hero.accessories.findIndex(
-      a => a.name.includes(name) ||
+    const index=hero.accessories.findIndex(
+      a=>a.name.includes(name)||
         name.includes(a.name)
     );
 
-    if (index < 0) return false;
+    if(index<0)return false;
 
-    hero.accessories.splice(index, 1);
-
+    hero.accessories.splice(index,1);
     updateHeroList();
-
-    burst(
-      hero.x * width,
-      hero.y * height,
-      25
-    );
-
+    burst(hero.x*width,hero.y*height,25);
     return true;
   }
 
-  /* ===================================
-     新增 Plus-Plus 背景物件
-  =================================== */
-
-  async function addEnvironmentObject(decision) {
-    const description = String(
-      decision.description ||
-      decision.name ||
-      "a colorful tree"
+  async function addEnvironmentObject(d) {
+    const description=String(
+      d.description||d.name||"a colorful tree"
     );
 
-    busy(
-      true,
-      "🌳 正在為世界增加新的 Plus-Plus 積木物件……"
-    );
+    busy(true,"🌳 正在生成 Plus-Plus 世界物件……");
 
-    const result = await ai(
+    const result=await ai(
       "generateEnvironmentObject",
-      { description },
-      180000
+      {description},180000
     );
 
-    const img = await loadPicture(result.image);
+    const img=await loadPicture(result.image);
+    const count=S.environmentObjects.length;
 
-    const count = S.environmentObjects.length;
-
-    const locations = [
-      {x: .22, y: .69},
-      {x: .78, y: .67},
-      {x: .35, y: .78},
-      {x: .66, y: .78},
-      {x: .5, y: .47}
+    const places=[
+      {x:.22,y:.69},
+      {x:.78,y:.67},
+      {x:.35,y:.78},
+      {x:.66,y:.78},
+      {x:.5,y:.47}
     ];
 
-    const pos = locations[count % locations.length];
+    const pos=places[count%places.length];
 
-    const obj = {
-      id: uid(),
-      name: String(decision.name || "新物件"),
+    const obj={
+      id:uid(),
+      name:String(d.name||"新物件"),
       description,
-      image: img,
-      imageData: result.image,
-
-      x: pos.x,
-      y: pos.y,
-      size: .28,
-      phase: Math.random() * Math.PI * 2
+      image:img,
+      imageData:result.image,
+      x:pos.x,
+      y:pos.y,
+      size:.28,
+      phase:Math.random()*Math.PI*2
     };
 
     S.environmentObjects.push(obj);
-
     burst(
-      obj.x * width,
-      obj.y * height,
-      55,
-      "#b8e7cb"
+      obj.x*width,obj.y*height,
+      55,"#b8e7cb"
     );
-
     confirmSound();
-
     return obj;
   }
 
-  /* ===================================
-     重新生成周圍背景
-     原始積木圖層不會被修改
-  =================================== */
-
-  async function regenerateWorld(decision) {
-    const prompt = String(
-      decision.worldPrompt ||
-      decision.description ||
-      ""
+  async function regenerateWorld(d) {
+    const prompt=String(
+      d.worldPrompt||d.description||""
     ).trim();
 
-    if (!prompt) {
-      throw new Error(
-        "AI 沒有提供新背景描述"
-      );
+    if(!prompt) {
+      throw new Error("AI 沒有提供新背景描述");
     }
 
-    busy(
-      true,
-      "🌈 正在改變周圍的 Plus-Plus 世界……"
-    );
+    busy(true,"🌈 正在改變 Plus-Plus 世界……");
 
-    const info = {
-      name: decision.name || S.worldName,
-      worldName: decision.name || S.worldName,
-      worldPrompt: prompt,
-      description: prompt
+    const info={
+      name:d.name||S.worldName,
+      worldName:d.name||S.worldName,
+      worldPrompt:prompt,
+      description:prompt
     };
 
-    let result;
+    const scene=!!S.originalScene;
 
-    if (
-      S.originalScene &&
-      S.lastPhoto
-    ) {
-      result = await ai(
-        "generateEnvironmentLayer",
-        {
-          image: S.lastPhoto,
-          info
-        },
-        180000
-      );
-    } else {
-      result = await ai(
-        "generateWorld",
-        { info },
-        180000
-      );
-    }
-
-    await setWorld(
-      result.image,
-      info.worldName
-    );
-
-    S.worldPrompt = prompt;
-
-    effect(decision.effect || "sparkle");
-  }
-
-  /* ===================================
-     新增另一個獨立角色
-  =================================== */
-
-  async function addCharacter(decision) {
-    busy(
-      true,
-      "🧩 正在創造新的 Plus-Plus 朋友……"
-    );
-
-    const result = await ai(
-      "generateCharacter",
+    const result=await ai(
+      scene?"generateEnvironmentLayer":"generateWorld",
       {
-        description: decision.description ||
-          decision.name ||
-          "a friendly creature"
+        image:S.lastPhoto,
+        info
       },
       180000
     );
 
-    const img = await loadPicture(result.image);
+    await setWorld(result.image,info.worldName);
+    S.worldPrompt=prompt;
+    effect(d.effect||"sparkle");
+    return null;
+  }
 
-    const hero = {
-      id: uid(),
-      name: decision.name || "新朋友",
-      description: decision.description || "",
+  async function addCharacter(d) {
+    busy(true,"🧩 正在創造新的 Plus-Plus 朋友……");
 
-      original: img,
-      originalData: result.image,
+    const result=await ai(
+      "generateCharacter",
+      {
+        description:d.description||
+          d.name||"a friendly creature"
+      },
+      180000
+    );
 
-      accessories: [],
+    const img=await loadPicture(result.image);
 
-      x: .3 + Math.random() * .4,
-      y: .67,
-      baseY: .67,
-      size: 270,
-      scale: 1,
-      direction: 1,
-      speed: .00007,
-      movement: movement(decision.movement),
-      phase: Math.random() * Math.PI * 2,
-
-      entering: false,
-      speech: "",
-      speechUntil: 0
+    const hero={
+      id:uid(),
+      name:String(d.name||"新朋友"),
+      description:String(d.description||""),
+      original:img,
+      originalData:result.image,
+      accessories:[],
+      x:.3+Math.random()*.4,
+      y:.67,
+      baseY:.67,
+      size:270,
+      scale:1,
+      direction:1,
+      speed:.00007,
+      movement:movement(d.movement),
+      phase:Math.random()*Math.PI*2,
+      entering:false,
+      speech:"",
+      speechUntil:0
     };
 
     S.heroes.push(hero);
-    S.selectedId = hero.id;
+    S.selectedId=hero.id;
+
+    if(d.movement) {
+      setMovement(hero,d.movement);
+    }
 
     updateHeroList();
-
-    burst(
-      hero.x * width,
-      hero.y * height,
-      55
-    );
-
+    burst(hero.x*width,hero.y*height,55);
     return hero;
   }
 
-  /* ===================================
-     語音動作分流
-  =================================== */
-
-  async function execute(decision) {
-    if (!decision || typeof decision !== "object") {
-      throw new Error("AI 沒有回傳有效操作指令");
+  async function execute(d) {
+    if(!d||typeof d!=="object") {
+      throw new Error("AI 沒有回傳有效指令");
     }
 
-    const action = String(decision.action || "none");
-    let hero = targetHero(decision);
+    const action=String(d.action||"none");
+    let hero=targetHero(d);
 
-    switch (action) {
+    switch(action) {
       case "addAccessory":
-        hero = await addAccessory(decision);
+        hero=await addAccessory(d);
         break;
 
       case "removeAccessory":
-        if (!removeAccessory(decision)) {
+        if(!removeAccessory(d)) {
           throw new Error("找不到要移除的造型");
         }
         break;
 
       case "addEnvironmentObject":
-        await addEnvironmentObject(decision);
-        hero = null;
+        await addEnvironmentObject(d);
+        hero=null;
         break;
 
       case "regenerateWorld":
-        await regenerateWorld(decision);
-        hero = null;
+        await regenerateWorld(d);
+        hero=null;
         break;
 
       case "addCharacter":
-        hero = await addCharacter(decision);
+        hero=await addCharacter(d);
         break;
 
       case "changeMovement":
-        if (!setMovement(hero, decision.movement)) {
-          throw new Error("目前沒有可以操作的角色");
+        if(!setMovement(hero,d.movement)) {
+          throw new Error("目前沒有可操作的角色");
         }
         break;
 
       case "move":
-        if (!hero) {
-          throw new Error("目前沒有角色");
-        }
-
-        hero.direction *= -1;
-        burst(hero.x * width, hero.y * height, 25);
+        if(!hero)throw new Error("目前沒有角色");
+        hero.direction*=-1;
+        burst(hero.x*width,hero.y*height,25);
         break;
 
       case "changeSize":
-        if (!hero) {
-          throw new Error("目前沒有角色");
-        }
-
-        hero.scale = clamp(
-          Number(decision.size) || 1,
-          .5,
-          2
-        );
-
-        burst(hero.x * width, hero.y * height, 30);
+        if(!hero)throw new Error("目前沒有角色");
+        hero.scale=clamp(Number(d.size)||1,.5,2);
+        burst(hero.x*width,hero.y*height,30);
         break;
 
       case "effect":
-        effect(decision.effect || "sparkle");
+        effect(d.effect||"sparkle");
         break;
 
       case "none":
@@ -439,8 +320,8 @@ window.PPDirector = (() => {
     }
 
     speak(
-      decision.reply ||
-      "你的想像已經加入世界了！接下來還想創造什麼呢？",
+      d.reply||
+      "你的想像已加入世界！接下來還想創造什麼呢？",
       hero
     );
   }
