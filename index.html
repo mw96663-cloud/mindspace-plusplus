@@ -164,6 +164,9 @@ section h2{font-size:16px;margin:0 0 12px}
     <textarea id="classificationDescription" class="field" rows="3"
       placeholder="例如：這是一隻會在天空游泳的魚，牠很害羞"></textarea>
 
+    <button id="classificationMic" class="action">🎙️ 按這裡，說出你的想像</button>
+    <p id="classificationVoiceStatus" class="muted" aria-live="polite">按麥克風後說出作品的身分、能力與生活環境。</p>
+
     <button id="analyzeCreationAI" class="action primary">✨ 讓 AI 理解我的作品</button>
 
     <div id="aiSuggestion">等待孩子描述作品。</div>
@@ -875,6 +878,7 @@ $("saveEditor").onclick = async () => {
     $("classificationMessage").textContent =
       "AI 的判斷可以更正，最後由你決定。";
 
+    setVoiceStatus("按麥克風說出你的想像，或直接輸入文字。");
     openModal("classificationModal");
 
   } catch (error) {
@@ -1018,6 +1022,7 @@ $("confirmClassification").onclick = () => {
     return;
   }
 
+  stopCreationVoice(true);
   closeModal("classificationModal");
 
   say(
@@ -1030,6 +1035,7 @@ $("confirmClassification").onclick = () => {
 $("skipClassification").onclick = () => {
   if (analyzing) return;
 
+  stopCreationVoice(true);
   closeModal("classificationModal");
   say("作品已經留在世界中，可以繼續創造！");
 };
@@ -1048,11 +1054,116 @@ $("clearWorld").onclick = () => {
   window.clearMindspaceWorld?.();
 };
 
-/* 下一階段語音 */
+/* 語音描述：瀏覽器語音轉文字 → 現有 OpenAI Bridge */
+const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+let creationRecognition = null;
+let creationListening = false;
+let voiceCancelled = false;
+let voiceError = false;
 
-$("bubbleMic").onclick =
+function setVoiceStatus(message) {
+  $("classificationVoiceStatus").textContent = message;
+}
+function updateMicButton() {
+  const button = $("classificationMic");
+  button.textContent = creationListening
+    ? "⏹️ 結束說話，交給 AI 理解"
+    : "🎙️ 按這裡，說出你的想像";
+  button.setAttribute("aria-pressed", String(creationListening));
+  button.style.background = creationListening ? "#FFE0D8" : "#E5F1FC";
+}
+function stopCreationVoice(cancel = false) {
+  if (!creationRecognition) return;
+  if (cancel) {
+    voiceCancelled = true;
+    creationRecognition.abort();
+  } else {
+    creationRecognition.stop();
+  }
+}
+function startCreationVoice() {
+  if (creationListening) {
+    stopCreationVoice();
+    return;
+  }
+  if (!SpeechRecognitionClass) {
+    setVoiceStatus("瀏覽器不支援語音辨識，請使用 Chrome 或 Edge，或直接輸入文字。");
+    return;
+  }
+  if (!latestCreationId || !latestCreationImage || analyzing) {
+    setVoiceStatus("請先拍照完成去背，並等待目前的辨識結束。");
+    return;
+  }
+  const recognition = new SpeechRecognitionClass();
+  creationRecognition = recognition;
+  voiceCancelled = false;
+  voiceError = false;
+  const previous = $("classificationDescription").value.trim();
+  let transcript = "";
+  recognition.lang = "zh-TW";
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+  recognition.onstart = () => {
+    creationListening = true;
+    updateMicButton();
+    setVoiceStatus("🎙️ 正在聆聽……說出作品是什麼、會做什麼、住在哪裡。");
+    say("我正在聽你的想像！");
+  };
+  recognition.onresult = event => {
+    let finalText = "";
+    let interimText = "";
+    for (let i = 0; i < event.results.length; i++) {
+      const text = event.results[i][0]?.transcript || "";
+      if (event.results[i].isFinal) finalText += text;
+      else interimText += text;
+    }
+    transcript = (finalText + interimText).trim();
+    $("classificationDescription").value = [previous, transcript].filter(Boolean).join("\n");
+    setVoiceStatus("辨識內容：" + transcript);
+  };
+  recognition.onerror = event => {
+    voiceError = true;
+    const errors = {
+      "not-allowed": "麥克風權限被拒絕，請允許瀏覽器使用麥克風。",
+      "service-not-allowed": "瀏覽器未允許語音辨識服務。",
+      "no-speech": "沒有聽到聲音，請再試一次。",
+      "audio-capture": "找不到可用的麥克風。",
+      "network": "語音辨識服務無法連線，請檢查網路。"
+    };
+    setVoiceStatus(errors[event.error] || "語音辨識失敗：" + event.error);
+  };
+  recognition.onend = () => {
+    creationListening = false;
+    creationRecognition = null;
+    updateMicButton();
+    if (voiceCancelled || voiceError) return;
+    if (!transcript.trim()) {
+      setVoiceStatus("沒有取得語音內容，請再試一次。");
+      return;
+    }
+    setVoiceStatus("語音完成，正在交給 OpenAI 理解作品……");
+    $("analyzeCreationAI").click();
+  };
+  try {
+    recognition.start();
+  } catch (error) {
+    creationListening = false;
+    creationRecognition = null;
+    updateMicButton();
+    setVoiceStatus("無法啟動語音辨識：" + error.message);
+  }
+}
+$("classificationMic").onclick = startCreationVoice;
+$("bubbleMic").onclick = () => {
+  if (!$("classificationModal").classList.contains("hidden")) {
+    startCreationVoice();
+  } else {
+    say("請先拍照建立作品，再使用分類視窗的語音描述。");
+  }
+};
 $("micButton").onclick = () => {
-  say("下一階段將加入真正的語音變身與自由創作。");
+  say("語音變身與故事修改將在下一階段加入；目前可用語音描述新作品。");
 };
 
 connectBridge();
