@@ -1,22 +1,31 @@
 
 /*
  * Mindspace Plus-Plus
- * sketch.js｜互動世界 v1
+ * sketch.js｜Character + Environment v2
  *
  * 功能：
- * - p5.js 全螢幕世界
- * - 接收去背 PNG
- * - 多個作品持續共存
- * - 每個作品獨立漂浮與活動
- * - 不因新增作品清空世界
+ * 1. 原始積木圖片進入世界
+ * 2. 多個作品持續共存
+ * 3. Character 依 AI 特質活動
+ * 4. Environment 延伸場景
+ * 5. 環境專屬 3 秒特效
+ * 6. 孩子可拖曳作品
  *
- * 目前尚未接入 AI 角色／環境分類。
+ * 不會自行呼叫假 AI。
+ * AI 資料由 index.html 的真實後端請求提供。
  */
 
 const creations = [];
+const environments = [];
+const particles = [];
 
-let bubbles = [];
+window.mindspaceCreations = creations;
+
 let worldTime = 0;
+let activeEffects = [];
+let dragging = null;
+let dragDX = 0;
+let dragDY = 0;
 
 function setup() {
   const canvas = createCanvas(
@@ -30,43 +39,38 @@ function setup() {
   rectMode(CENTER);
   noStroke();
 
-  for (let i = 0; i < 35; i++) {
-    bubbles.push(makeBubble());
+  for (let i = 0; i < 40; i++) {
+    particles.push({
+      x: random(width),
+      y: random(height),
+      r: random(2, 10),
+      speed: random(.2, .9),
+      alpha: random(25, 100)
+    });
   }
 
   window.updateMindspaceCount?.(0);
 }
 
-function makeBubble() {
-  return {
-    x: random(width),
-    y: random(height),
-    r: random(3, 14),
-    speed: random(.25, 1.1),
-    alpha: random(35, 110)
-  };
-}
-
 function draw() {
-  worldTime += .01;
+  worldTime += deltaTime / 1000;
 
   drawBackground();
-  drawBubbles();
-  drawGround();
+  drawEnvironmentLayers();
+  drawAmbientParticles();
 
-  for (const creation of creations) {
-    updateCreation(creation);
-    drawCreation(creation);
+  // 原始積木永遠顯示在場景中。
+  for (const item of creations) {
+    updateCreation(item);
+    drawCreation(item);
   }
+
+  drawEffects();
 }
 
-/*
- * 目前使用中性的數位世界。
- * 後續由 AI 根據角色或環境改變。
- */
 function drawBackground() {
-  const topColor = color(141, 221, 239);
-  const bottomColor = color(23, 83, 139);
+  const topColor = color(147, 220, 243);
+  const bottomColor = color(35, 94, 150);
 
   for (let y = 0; y < height; y += 5) {
     const t = y / height;
@@ -78,12 +82,11 @@ function drawBackground() {
 
   noStroke();
 
-  // 柔和的光線
-  fill(255, 255, 255, 13);
+  fill(255, 255, 255, 12);
 
   for (let i = 0; i < 7; i++) {
-    const x = width * (i / 6);
-    const drift = sin(worldTime + i) * 30;
+    const x = width * i / 6;
+    const drift = sin(worldTime * .2 + i) * 30;
 
     triangle(
       x + drift, 0,
@@ -93,55 +96,29 @@ function drawBackground() {
   }
 }
 
-function drawBubbles() {
-  for (const b of bubbles) {
-    b.y -= b.speed;
-    b.x += sin(worldTime + b.y * .01) * .12;
+function drawAmbientParticles() {
+  noStroke();
 
-    if (b.y < -20) {
-      b.y = height + 20;
-      b.x = random(width);
+  for (const p of particles) {
+    p.y -= p.speed;
+
+    if (p.y < -20) {
+      p.y = height + 20;
+      p.x = random(width);
     }
 
-    fill(255, 255, 255, b.alpha);
-    circle(b.x, b.y, b.r);
+    fill(255, 255, 255, p.alpha);
+    circle(p.x, p.y, p.r);
   }
 }
 
-function drawGround() {
-  fill(14, 66, 105, 70);
+/* 加入原始積木 */
 
-  ellipse(
-    width / 2,
-    height + 35,
-    width * 1.5,
-    190
-  );
-
-  fill(255, 255, 255, 15);
-
-  for (let i = 0; i < 12; i++) {
-    const x = i * width / 11;
-
-    ellipse(
-      x,
-      height - 35 + sin(i) * 12,
-      70,
-      10
-    );
-  }
-}
-
-/*
- * 接收透明 PNG。
- *
- * 成功載入後才加入 creations。
- * 不會清空既有作品。
- */
 window.addMindspaceCreation = function(dataURL) {
   return new Promise((resolve, reject) => {
     loadImage(
       dataURL,
+
       img => {
         const maxSize = min(
           width * .27,
@@ -154,41 +131,43 @@ window.addMindspaceCreation = function(dataURL) {
           maxSize / img.height
         );
 
-        const itemWidth = img.width * scale;
-        const itemHeight = img.height * scale;
+        const w = img.width * scale;
+        const h = img.height * scale;
 
         const item = {
           id: crypto.randomUUID(),
-          img: img,
+          img,
 
           x: random(
-            itemWidth / 2 + 20,
-            max(itemWidth / 2 + 21,
-                width - itemWidth / 2 - 20)
+            w / 2 + 20,
+            max(w / 2 + 21, width - w / 2 - 20)
           ),
 
           y: random(
-            max(100, itemHeight / 2 + 30),
-            max(101, height - itemHeight / 2 - 50)
+            h / 2 + 40,
+            max(h / 2 + 41, height - h / 2 - 40)
           ),
 
           baseY: 0,
-          w: itemWidth,
-          h: itemHeight,
+          w,
+          h,
 
-          vx: random(-.65, .65),
+          vx: random(-.6, .6),
           phase: random(TWO_PI),
-          floatSpeed: random(.8, 1.5),
-          floatRange: random(5, 15),
+          floatRange: random(5, 13),
 
-          rotation: random(-.05, .05),
-          rotationSpeed: random(-.002, .002),
-
-          selected: false,
-
-          // STEP 04 後續會使用
           kind: "unclassified",
-          description: ""
+          name: "",
+          description: "",
+
+          personality: "",
+          movement: "float",
+          speed: 1,
+          energy: .5,
+          interaction: "",
+
+          environmentData: null,
+          rotation: random(-.04, .04)
         };
 
         item.baseY = item.y;
@@ -201,129 +180,570 @@ window.addMindspaceCreation = function(dataURL) {
 
         resolve(item.id);
       },
-      error => {
-        reject(
-          new Error("p5.js 無法載入去背圖片")
-        );
-      }
+
+      () => reject(
+        new Error("無法載入去背積木 PNG")
+      )
     );
   });
 };
 
-/*
- * 每個作品獨立移動。
- *
- * 現在是基礎漂浮行為。
- * 後續依 AI 角色特質調整。
- */
-function updateCreation(c) {
-  c.x += c.vx;
-  c.phase += .015 * c.floatSpeed;
-  c.rotation += c.rotationSpeed;
+/* 套用孩子確認的角色／環境 */
 
-  const margin = c.w / 2 + 15;
+window.applyMindspaceClassification =
+function(id, kind, description, aiData) {
 
-  if (c.x < margin) {
-    c.x = margin;
-    c.vx = abs(c.vx);
+  const item = creations.find(
+    creation => creation.id === id
+  );
+
+  if (!item) return false;
+
+  if (
+    kind !== "character" &&
+    kind !== "environment"
+  ) {
+    return false;
   }
 
-  if (c.x > width - margin) {
-    c.x = width - margin;
-    c.vx = -abs(c.vx);
+  item.kind = kind;
+  item.description = description || "";
+
+  // 有 AI 回覆時，套用真實辨識資料。
+  // 沒有 AI 回覆時，使用基礎互動行為，
+  // 不宣稱它是 AI 生成。
+  if (aiData) {
+    item.name = String(aiData.name || "");
+
+    if (kind === "character") {
+      applyCharacterData(
+        item,
+        aiData.character || {}
+      );
+    }
+
+    if (kind === "environment") {
+      applyEnvironmentData(
+        item,
+        aiData.environment || {}
+      );
+    }
+
+  } else {
+    if (kind === "character") {
+      applyCharacterData(item, {
+        movement: "float",
+        speed: 1,
+        energy: .5
+      });
+    } else {
+      applyEnvironmentData(item, {
+        theme: "自由想像",
+        palette: ["#B6DDF6", "#FFE6A5"],
+        elements: ["sparkle"],
+        effect: "sparkle"
+      });
+    }
   }
 
-  c.y =
-    c.baseY +
-    sin(c.phase) * c.floatRange;
+  return true;
+};
+
+/* Character */
+
+function applyCharacterData(item, data) {
+  item.personality =
+    String(data.personality || "充滿好奇");
+
+  item.movement =
+    ["float", "swim", "walk", "fly", "bounce"]
+      .includes(data.movement)
+      ? data.movement
+      : "float";
+
+  item.speed = constrain(
+    Number(data.speed) || 1,
+    .2,
+    3
+  );
+
+  item.energy = constrain(
+    Number(data.energy) || .5,
+    0,
+    1
+  );
+
+  item.interaction =
+    String(data.interaction || "自由探索");
+
+  // 讓角色的活動速度反映 AI 特質。
+  item.vx =
+    (random() < .5 ? -1 : 1) *
+    (.3 + item.speed * .45);
+
+  item.floatRange =
+    5 + item.energy * 24;
 }
 
-function drawCreation(c) {
+function updateCreation(item) {
+  if (dragging === item) return;
+
+  if (item.kind === "environment") {
+    // 環境作品本體保留，緩慢漂浮。
+    item.y =
+      item.baseY +
+      sin(worldTime * .5 + item.phase) * 3;
+    return;
+  }
+
+  const speed =
+    item.kind === "character"
+      ? item.speed
+      : 1;
+
+  const energy =
+    item.kind === "character"
+      ? item.energy
+      : .5;
+
+  const t = worldTime;
+
+  switch (item.movement) {
+
+    case "swim":
+      item.x += item.vx;
+      item.y =
+        item.baseY +
+        sin(t * (1.8 + speed) + item.phase) *
+        (8 + energy * 18);
+      break;
+
+    case "fly":
+      item.x += item.vx * 1.3;
+      item.y =
+        item.baseY +
+        sin(t * (1.2 + speed) + item.phase) *
+        (20 + energy * 35);
+      break;
+
+    case "walk":
+      item.x += item.vx * .55;
+      item.y =
+        item.baseY +
+        abs(sin(t * (3 + speed) + item.phase)) *
+        (3 + energy * 8);
+      break;
+
+    case "bounce":
+      item.x += item.vx * .8;
+      item.y =
+        item.baseY -
+        abs(sin(t * (2 + speed) + item.phase)) *
+        (20 + energy * 55);
+      break;
+
+    default:
+      item.x += item.vx * .45;
+      item.y =
+        item.baseY +
+        sin(t * (1 + speed) + item.phase) *
+        item.floatRange;
+      break;
+  }
+
+  const margin = item.w / 2 + 12;
+
+  if (item.x < margin) {
+    item.x = margin;
+    item.vx = abs(item.vx);
+  }
+
+  if (item.x > width - margin) {
+    item.x = width - margin;
+    item.vx = -abs(item.vx);
+  }
+
+  item.y = constrain(
+    item.y,
+    item.h / 2 + 10,
+    height - item.h / 2 - 15
+  );
+}
+
+function drawCreation(item) {
   push();
 
-  translate(c.x, c.y);
-  rotate(sin(c.rotation) * .06);
+  translate(item.x, item.y);
 
-  // 輕微陰影
+  if (item.kind === "character") {
+    const rotationAmount =
+      item.movement === "swim"
+        ? .12
+        : .045;
+
+    rotate(
+      sin(worldTime * 1.4 + item.phase) *
+      rotationAmount
+    );
+  }
+
   drawingContext.shadowColor =
-    "rgba(0,0,0,.24)";
+    "rgba(0,0,0,.22)";
 
   drawingContext.shadowBlur = 16;
-  drawingContext.shadowOffsetY = 9;
+  drawingContext.shadowOffsetY = 8;
 
   image(
-    c.img,
+    item.img,
     0,
     0,
-    c.w,
-    c.h
+    item.w,
+    item.h
   );
 
   pop();
 }
 
-/*
- * 清空世界：
- * 只在孩子明確按下清空按鈕時執行。
- */
-window.clearMindspaceWorld = function() {
-  creations.length = 0;
-  window.updateMindspaceCount?.(0);
-};
+/* Environment */
 
-/*
- * 保留作品並調整畫布。
- */
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
+function applyEnvironmentData(item, data) {
+  const palette =
+    Array.isArray(data.palette)
+      ? data.palette.filter(
+          value =>
+            typeof value === "string" &&
+            /^#[0-9a-fA-F]{6}$/.test(value)
+        )
+      : [];
 
-  for (const c of creations) {
-    c.x = constrain(
-      c.x,
-      c.w / 2,
-      max(c.w / 2, width - c.w / 2)
+  const elements =
+    Array.isArray(data.elements)
+      ? data.elements
+      : [];
+
+  const effect =
+    ["sparkle", "rain", "bubbles", "glow", "wind"]
+      .includes(data.effect)
+      ? data.effect
+      : "sparkle";
+
+  item.environmentData = {
+    theme: String(data.theme || "想像世界"),
+    palette:
+      palette.length
+        ? palette
+        : ["#A7DDF6", "#FFE5A6"],
+    elements: elements.slice(0, 6),
+    effect: effect
+  };
+
+  // 若重複確認同一個作品，更新而不複製環境。
+  const existing = environments.find(
+    env => env.id === item.id
+  );
+
+  if (existing) {
+    existing.data = item.environmentData;
+  } else {
+    environments.push({
+      id: item.id,
+      data: item.environmentData,
+      seed: random(10000)
+    });
+  }
+
+  startEnvironmentEffect(
+    effect,
+    item.x,
+    item.y
+  );
+}
+
+function drawEnvironmentLayers() {
+  for (const env of environments) {
+    const data = env.data;
+    const palette = data.palette;
+
+    const c1 = color(
+      palette[0] || "#B5E2F5"
     );
 
-    c.baseY = constrain(
-      c.baseY,
-      c.h / 2,
-      max(c.h / 2, height - c.h / 2)
+    const c2 = color(
+      palette[1] || "#FFE7B0"
     );
+
+    // 不清除其他環境，讓不同作品共存。
+    push();
+
+    noStroke();
+
+    fill(
+      red(c1),
+      green(c1),
+      blue(c1),
+      25
+    );
+
+    ellipse(
+      width * .5,
+      height * .83,
+      width * 1.2,
+      height * .28
+    );
+
+    for (let i = 0; i < data.elements.length; i++) {
+      drawEnvironmentElement(
+        data.elements[i],
+        i,
+        env.seed,
+        c1,
+        c2
+      );
+    }
+
+    pop();
   }
 }
 
-/*
- * 允許滑鼠拖曳積木。
- */
-let dragging = null;
-let dragDX = 0;
-let dragDY = 0;
+function drawEnvironmentElement(
+  type, index, seed, c1, c2
+) {
+  const x =
+    width * (.13 + ((index * .17 + seed * .001) % .74));
+
+  const y =
+    height * (.2 + ((index * .13 + seed * .0001) % .55));
+
+  const s = min(width, height) * .07;
+
+  push();
+  translate(x, y);
+  noStroke();
+
+  if (type === "cloud") {
+    fill(255, 255, 255, 95);
+    ellipse(-s * .4, 0, s, s * .6);
+    ellipse(0, -s * .15, s * 1.2, s * .85);
+    ellipse(s * .5, 0, s, s * .6);
+  }
+
+  if (type === "star" || type === "sparkle") {
+    fill(c2);
+    drawStar(0, 0, s * .18, s * .45, 5);
+  }
+
+  if (type === "bubble") {
+    noFill();
+    stroke(255, 255, 255, 120);
+    strokeWeight(2);
+    circle(0, 0, s);
+  }
+
+  if (type === "plant") {
+    stroke(c1);
+    strokeWeight(7);
+    noFill();
+    bezier(0, s, -s, 0, s, 0, 0, -s);
+  }
+
+  if (type === "rock") {
+    fill(c1);
+    ellipse(0, 0, s * 1.4, s * .8);
+  }
+
+  if (type === "mountain") {
+    fill(c1);
+    triangle(
+      -s, s * .6,
+      0, -s,
+      s, s * .6
+    );
+  }
+
+  if (type === "light") {
+    fill(
+      red(c2),
+      green(c2),
+      blue(c2),
+      35
+    );
+    circle(0, 0, s * 2.3);
+
+    fill(c2);
+    circle(0, 0, s * .25);
+  }
+
+  pop();
+}
+
+function drawStar(x, y, r1, r2, points) {
+  beginShape();
+
+  for (let i = 0; i < points * 2; i++) {
+    const angle =
+      -HALF_PI + i * PI / points;
+
+    const radius =
+      i % 2 === 0 ? r2 : r1;
+
+    vertex(
+      x + cos(angle) * radius,
+      y + sin(angle) * radius
+    );
+  }
+
+  endShape(CLOSE);
+}
+
+/* 3 秒環境特效 */
+
+function startEnvironmentEffect(type, x, y) {
+  activeEffects.push({
+    type,
+    x,
+    y,
+    start: millis(),
+    duration: 3000,
+    particles: Array.from(
+      {length: 48},
+      () => ({
+        angle: random(TWO_PI),
+        radius: random(15, 180),
+        speed: random(.5, 2.2),
+        size: random(3, 11),
+        offset: random(1000)
+      })
+    )
+  });
+}
+
+function drawEffects() {
+  const now = millis();
+
+  activeEffects = activeEffects.filter(
+    effect =>
+      now - effect.start < effect.duration
+  );
+
+  for (const effect of activeEffects) {
+    const elapsed =
+      now - effect.start;
+
+    const progress =
+      elapsed / effect.duration;
+
+    const alpha =
+      255 * (1 - progress);
+
+    push();
+
+    noStroke();
+
+    for (const p of effect.particles) {
+      let x = effect.x;
+      let y = effect.y;
+
+      switch (effect.type) {
+
+        case "rain":
+          x += cos(p.angle) * p.radius;
+          y =
+            (effect.y - 250 +
+            elapsed * p.speed * .5 +
+            p.offset) % height;
+
+          stroke(200, 235, 255, alpha);
+          strokeWeight(2);
+          line(x, y, x - 3, y + 16);
+          noStroke();
+          break;
+
+        case "bubbles":
+          x += cos(p.angle) * p.radius;
+          y -= progress * 220 * p.speed;
+
+          noFill();
+          stroke(255, 255, 255, alpha);
+          strokeWeight(2);
+          circle(x, y, p.size * 2);
+          noStroke();
+          break;
+
+        case "glow":
+          x += cos(p.angle) *
+            p.radius * progress;
+
+          y += sin(p.angle) *
+            p.radius * progress;
+
+          fill(255, 241, 155, alpha * .5);
+          circle(x, y, p.size * 3);
+          break;
+
+        case "wind":
+          x += progress * 300 * p.speed -
+            150;
+
+          y += sin(p.angle) * p.radius;
+
+          stroke(255, 255, 255, alpha);
+          strokeWeight(2);
+          line(x, y, x + 25, y);
+          noStroke();
+          break;
+
+        default:
+          x += cos(p.angle) *
+            p.radius * progress;
+
+          y += sin(p.angle) *
+            p.radius * progress;
+
+          fill(255, 245, 170, alpha);
+          drawStar(
+            x, y,
+            p.size * .25,
+            p.size,
+            5
+          );
+          break;
+      }
+    }
+
+    pop();
+  }
+}
+
+/* 拖曳作品 */
 
 function mousePressed() {
-  // 不攔截工作台與視窗操作
-  if (document.querySelector(".modal:not(.hidden)")) {
-    return;
-  }
+  if (
+    document.querySelector(
+      ".modal:not(.hidden)"
+    )
+  ) return;
 
   if (
     document.getElementById("sidebar")
       .classList.contains("open")
-  ) {
-    return;
-  }
+  ) return;
 
-  for (let i = creations.length - 1; i >= 0; i--) {
-    const c = creations[i];
+  for (
+    let i = creations.length - 1;
+    i >= 0;
+    i--
+  ) {
+    const item = creations[i];
 
     if (
-      mouseX > c.x - c.w / 2 &&
-      mouseX < c.x + c.w / 2 &&
-      mouseY > c.y - c.h / 2 &&
-      mouseY < c.y + c.h / 2
+      mouseX > item.x - item.w / 2 &&
+      mouseX < item.x + item.w / 2 &&
+      mouseY > item.y - item.h / 2 &&
+      mouseY < item.y + item.h / 2
     ) {
-      dragging = c;
-      dragDX = mouseX - c.x;
-      dragDY = mouseY - c.y;
+      dragging = item;
+      dragDX = mouseX - item.x;
+      dragDY = mouseY - item.y;
       return false;
     }
   }
@@ -341,4 +761,37 @@ function mouseDragged() {
 
 function mouseReleased() {
   dragging = null;
+}
+
+/* 世界清空 */
+
+window.clearMindspaceWorld = function() {
+  creations.length = 0;
+  environments.length = 0;
+  activeEffects.length = 0;
+
+  window.updateMindspaceCount?.(0);
+};
+
+/* 視窗大小調整 */
+
+function windowResized() {
+  resizeCanvas(
+    windowWidth,
+    windowHeight
+  );
+
+  for (const item of creations) {
+    item.x = constrain(
+      item.x,
+      item.w / 2,
+      max(item.w / 2, width - item.w / 2)
+    );
+
+    item.baseY = constrain(
+      item.baseY,
+      item.h / 2,
+      max(item.h / 2, height - item.h / 2)
+    );
+  }
 }
