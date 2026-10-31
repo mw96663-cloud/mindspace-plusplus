@@ -6085,21 +6085,28 @@ function startP5World() {
    30-B｜歡迎畫面
 ========================================================= */
 
-function initializeStartScreen() {
-  click(
-    "startButton",
-    () => {
-      modal(
-        "startScreen",
-        false
-      );
 
-      bubble(
-        "🧩 拼出你的第一個 Plus-Plus 作品吧！"
-      );
+function initializeStartScreen() {
+  click("startButton", async () => {
+    modal("startScreen", false);
+
+    const welcome =
+      "歡迎來到想像有形！" +
+      "你可以先用積木拼出任何你想像的東西，" +
+      "再按下拍照按鈕，" +
+      "讓它進入我們的想像世界！";
+
+    bubble("🧩 " + welcome);
+
+    // 使用者按下開始後，立即嘗試播放語音。
+    // 先使用瀏覽器語音，不必等待 GAS。
+    if (state.voiceEnabled) {
+      stopSpeech();
+      browserSpeech(welcome);
     }
-  );
+  });
 }
+
 
 /* =========================================================
    30-C｜系統初始化
