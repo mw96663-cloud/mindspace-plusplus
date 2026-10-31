@@ -2,760 +2,1283 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 
-  <title>Mindspace Plus-Plus｜想像有形</title>
+<title>Mindspace Plus-Plus｜想像有形</title>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.11/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.11/p5.min.js"></script>
 
-  <style>
-    * { box-sizing: border-box; }
+<style>
+* {
+  box-sizing: border-box;
+}
 
-    :root {
-      --ink: #27334b;
-      --panel: rgba(255,255,255,.96);
-      --accent: #ffcb58;
-    }
+:root {
+  --ink: #26364e;
+  --accent: #ffcc59;
+  --blue: #dceefe;
+  --white: #ffffff;
+}
 
-    body {
-      margin: 0;
-      font-family: "Noto Sans TC", Arial, sans-serif;
-      color: var(--ink);
-      overflow: hidden;
-      background: #123b67;
-    }
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
 
-    button, input, textarea, select {
-      font: inherit;
-    }
+body {
+  font-family: "Noto Sans TC", Arial, sans-serif;
+  background: #123e70;
+  color: var(--ink);
+  overflow: hidden;
+}
 
-    button {
-      cursor: pointer;
-      border: 0;
-    }
+button, textarea, input, select {
+  font: inherit;
+}
 
-    button:disabled {
-      opacity: .5;
-      cursor: not-allowed;
-    }
+button {
+  cursor: pointer;
+  border: 0;
+}
 
-    .hidden {
-      display: none !important;
-    }
+.hidden {
+  display: none !important;
+}
 
-    #scene {
-      position: fixed;
-      inset: 0;
-      overflow: hidden;
-      background: linear-gradient(
-        180deg, #70c8e8, #165487 75%, #103b69
-      );
-    }
+/* 數位世界 */
 
-    #scene canvas {
-      display: block;
-    }
+#scene {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    #a1e7f2 0%,
+    #4c9acb 45%,
+    #194a80 100%
+  );
+  overflow: hidden;
+}
 
-    #speechBubble {
-      position: fixed;
-      z-index: 15;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      max-width: min(580px, 82vw);
-      padding: 13px 22px;
-      border-radius: 24px;
-      background: rgba(255,255,255,.9);
-      box-shadow: 0 5px 24px #0002;
-      text-align: center;
-      pointer-events: none;
-    }
+#scene canvas {
+  display: block;
+}
 
-    #floatingControls {
-      position: fixed;
-      right: 20px;
-      bottom: 24px;
-      z-index: 25;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
+/* 歡迎訊息 */
 
-    .floatButton {
-      width: 58px;
-      height: 58px;
-      border-radius: 50%;
-      font-size: 25px;
-      background: white;
-      box-shadow: 0 5px 20px #0003;
-    }
+#speechBubble {
+  position: fixed;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
 
-    .floatButton.primary {
-      background: var(--accent);
-    }
+  max-width: min(620px, 88vw);
+  padding: 15px 24px;
 
-    #sidebar {
-      position: fixed;
-      z-index: 40;
-      top: 0;
-      right: 0;
-      bottom: 0;
-      width: min(410px, 100vw);
-      display: flex;
-      flex-direction: column;
-      background: var(--panel);
-      box-shadow: -8px 0 35px #0002;
-      transform: translateX(105%);
-      transition: transform .25s ease;
-    }
+  background: rgba(255,255,255,.94);
+  border-radius: 25px;
+  box-shadow: 0 8px 25px #0002;
 
-    #sidebar.is-open {
-      transform: translateX(0);
-    }
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.6;
+  pointer-events: none;
+}
 
-    body:has(#sidebar.is-open) #floatingControls {
-      display: none;
-    }
+/* 右下角浮動按鈕 */
 
-    .sidebarHeader {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 18px 20px;
-      border-bottom: 1px solid #e5e8ed;
-    }
+#floatingControls {
+  position: fixed;
+  right: 22px;
+  bottom: 24px;
+  z-index: 20;
 
-    .sidebarHeader h1 {
-      margin: 0;
-      font-size: 20px;
-    }
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
-    .sidebarBody {
-      padding: 20px;
-      overflow-y: auto;
-      flex: 1;
-    }
+.floatButton {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
 
-    section {
-      margin-bottom: 23px;
-    }
+  background: white;
+  font-size: 26px;
+  box-shadow: 0 6px 22px #0003;
 
-    section h2 {
-      margin: 0 0 10px;
-      font-size: 16px;
-    }
+  transition: transform .2s;
+}
 
-    .muted {
-      color: #718096;
-      font-size: 13px;
-      line-height: 1.6;
-    }
+.floatButton:hover {
+  transform: scale(1.06);
+}
 
-    .field {
-      width: 100%;
-      padding: 11px 12px;
-      border: 1px solid #d9dfe8;
-      border-radius: 12px;
-      background: white;
-      margin: 6px 0;
-    }
+.floatButton.primary {
+  background: var(--accent);
+}
 
-    .action {
-      width: 100%;
-      padding: 12px;
-      margin: 6px 0;
-      border-radius: 13px;
-      background: #e8f0fa;
-      color: var(--ink);
-      font-weight: 600;
-    }
+/* 工作台 */
 
-    .action.primary {
-      background: var(--accent);
-    }
+#sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
 
-    .action.dark {
-      background: #27334b;
-      color: white;
-    }
+  width: min(430px, 100vw);
+  z-index: 40;
 
-    .row {
-      display: flex;
-      gap: 8px;
-    }
+  display: flex;
+  flex-direction: column;
 
-    .row > * {
-      flex: 1;
-      min-width: 0;
-    }
+  background: #fff;
+  box-shadow: -10px 0 35px #0003;
 
-    #status {
-      padding: 12px;
-      border-radius: 12px;
-      background: #f1f4f8;
-      font-size: 13px;
-      line-height: 1.6;
-      overflow-wrap: anywhere;
-    }
+  transform: translateX(105%);
+  transition: transform .25s ease;
+}
 
-    #aiTestResult {
-      padding: 12px;
-      margin-top: 8px;
-      background: #f8fafc;
-      border-radius: 12px;
-      font-size: 12px;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      max-height: 230px;
-      overflow-y: auto;
-    }
+#sidebar.is-open {
+  transform: translateX(0);
+}
 
-    .modal {
-      position: fixed;
-      z-index: 80;
-      inset: 0;
-      background: rgba(8,20,42,.7);
-      display: grid;
-      place-items: center;
-      padding: 18px;
-    }
+#sidebar.is-open ~ #floatingControls {
+  display: none;
+}
 
-    .modalCard {
-      width: min(600px, 100%);
-      max-height: 92vh;
-      overflow-y: auto;
-      padding: 22px;
-      border-radius: 24px;
-      background: white;
-    }
+.sidebarHeader {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 
-    video, #editCanvas {
-      width: 100%;
-      max-height: 50vh;
-      object-fit: contain;
-      background: #e9edf2;
-      border-radius: 14px;
-    }
+  border-bottom: 1px solid #e4e9f0;
+}
 
-    #classificationPreview {
-      display: block;
-      width: 190px;
-      height: 190px;
-      object-fit: contain;
-      margin: auto;
-      background: #edf2f6;
-      border-radius: 14px;
-    }
+.sidebarHeader h1 {
+  font-size: 21px;
+  margin: 0;
+}
 
-    #chatLog {
-      height: 180px;
-      overflow-y: auto;
-      padding: 8px;
-      background: #f7f9fc;
-      border-radius: 12px;
-    }
+.closeButton {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #f0f3f8;
+  font-size: 22px;
+}
 
-    #bridgeFrame {
-      position: absolute;
-      width: 0;
-      height: 0;
-      border: 0;
-      opacity: 0;
-      pointer-events: none;
-    }
+.sidebarBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
 
-    @media (max-width: 600px) {
-      #speechBubble { font-size: 13px; }
-      #floatingControls { right: 12px; bottom: 14px; }
-      .floatButton { width: 52px; height: 52px; }
-    }
-  </style>
+section {
+  margin-bottom: 25px;
+}
+
+section h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.muted {
+  color: #66778d;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.field {
+  width: 100%;
+  margin: 7px 0;
+  padding: 12px;
+
+  border: 1px solid #d7e0ea;
+  border-radius: 13px;
+  background: white;
+}
+
+.action {
+  display: block;
+  width: 100%;
+
+  padding: 13px;
+  margin: 8px 0;
+
+  border-radius: 13px;
+  background: #e5f1fc;
+
+  color: var(--ink);
+  font-weight: 600;
+
+  transition: background .2s;
+}
+
+.action:hover {
+  background: #d3e8fa;
+}
+
+.action.primary {
+  background: var(--accent);
+}
+
+.action.primary:hover {
+  background: #f7bc36;
+}
+
+.action.dark {
+  background: #26364e;
+  color: white;
+}
+
+.row {
+  display: flex;
+  gap: 9px;
+}
+
+.row > * {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 未完成的功能仍正常顯示 */
+
+.comingSoon {
+  background: #eef3f9;
+  color: #52677f;
+}
+
+.comingSoon::after {
+  content: " · 開發中";
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.comingSoon:hover {
+  background: #e2ebf5;
+}
+
+/* AI 連線 */
+
+#status {
+  padding: 14px;
+  background: #f0f4f9;
+  border-radius: 13px;
+
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+#status.success {
+  background: #e7f8ef;
+  color: #14633a;
+}
+
+#status.error {
+  background: #fff0ed;
+  color: #a13a2e;
+}
+
+#aiTestResult {
+  padding: 13px;
+  margin-top: 10px;
+
+  background: #f8fafc;
+  border-radius: 12px;
+
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+
+  max-height: 270px;
+  overflow-y: auto;
+}
+
+/* 視窗 */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+
+  background: rgba(9,23,44,.7);
+
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.modalCard {
+  width: min(620px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+
+  padding: 24px;
+  border-radius: 24px;
+  background: white;
+}
+
+.modalCard h2 {
+  margin-top: 0;
+}
+
+video, #editCanvas {
+  width: 100%;
+  max-height: 52vh;
+  object-fit: contain;
+  background: #e8eef5;
+  border-radius: 14px;
+}
+
+#classificationPreview {
+  display: block;
+  width: 190px;
+  height: 190px;
+  object-fit: contain;
+
+  margin: 15px auto;
+  background: #eef3f8;
+  border-radius: 15px;
+}
+
+#chatLog {
+  min-height: 130px;
+  max-height: 200px;
+  overflow-y: auto;
+
+  padding: 12px;
+  border-radius: 12px;
+  background: #f5f8fc;
+}
+
+#bridgeFrame {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+}
+
+@media (max-width: 600px) {
+  #floatingControls {
+    right: 12px;
+    bottom: 14px;
+  }
+
+  .floatButton {
+    width: 54px;
+    height: 54px;
+  }
+
+  #speechBubble {
+    font-size: 13px;
+  }
+}
+</style>
 </head>
 
 <body>
 
-  <!-- STEP 03～05｜持續存在的數位世界 -->
-  <main id="scene"></main>
+<!-- STEP 03～05：p5.js 世界 -->
+<main id="scene"></main>
 
-  <div id="speechBubble">
-    歡迎來到 Mindspace！你的想像可以成為這個世界的一部分。
-  </div>
+<div id="speechBubble">
+  歡迎來到 Mindspace！用 Plus-Plus 積木，
+  創造屬於你的想像世界。
+</div>
 
-  <!-- 浮動操作 -->
-  <nav id="floatingControls">
-    <button id="bubbleCamera"
-            class="floatButton"
-            title="拍攝積木"
-            disabled>📷</button>
+<!-- 浮動操作 -->
+<nav id="floatingControls">
 
-    <button id="bubbleMic"
-            class="floatButton"
-            title="語音創作"
-            disabled>🎙️</button>
+  <button
+    id="bubbleCamera"
+    class="floatButton"
+    title="拍攝積木"
+  >📷</button>
 
-    <button id="bubbleWorkbench"
-            class="floatButton primary"
-            title="開啟工作台">🧺</button>
-  </nav>
+  <button
+    id="bubbleMic"
+    class="floatButton"
+    title="語音創作"
+  >🎙️</button>
 
-  <!-- 可收闔工作台 -->
-  <aside id="sidebar">
-    <header class="sidebarHeader">
-      <h1>🧺 創作工作台</h1>
-      <button id="closeWorkbench"
-              class="floatButton"
-              style="width:38px;height:38px;font-size:20px">
-        ×
-      </button>
-    </header>
+  <button
+    id="bubbleWorkbench"
+    class="floatButton primary"
+    title="創作工作台"
+  >🧺</button>
 
-    <div class="sidebarBody">
+</nav>
 
-      <section>
-        <h2>🔌 AI 真實連線</h2>
-        <div id="status">尚未測試 AI 連線</div>
+<!-- 創作工作台 -->
+<aside id="sidebar">
 
-        <button id="testBridge"
-                class="action primary">
-          測試 OpenAI 真實連線
-        </button>
+  <header class="sidebarHeader">
 
-        <div id="aiTestResult">
-          等待測試結果。
-        </div>
-      </section>
+    <h1>🧺 Mindspace 工作台</h1>
 
-      <section>
-        <h2>STEP 01｜自由創作</h2>
-        <p class="muted">
-          使用 Plus-Plus 積木拼出角色、建築、地形，
-          或任何你想像中的作品。
-        </p>
-      </section>
+    <button
+      id="closeWorkbench"
+      class="closeButton"
+    >×</button>
 
-      <section>
-        <h2>STEP 02｜拍照與 AI 去背</h2>
-        <button id="openCamera"
-                class="action primary"
-                disabled>📷 拍攝作品</button>
+  </header>
 
-        <button id="uploadPhoto"
-                class="action"
-                disabled>上傳照片</button>
+  <div class="sidebarBody">
 
-        <input id="photoFile"
-               type="file"
-               accept="image/*"
-               class="hidden">
-      </section>
+    <!-- AI 連線 -->
+    <section>
 
-      <section>
-        <h2>STEP 03～05｜共同世界</h2>
-        <p class="muted">
-          去背後的原始積木會立即進入世界。
-          角色與環境可以持續共存。
-        </p>
+      <h2>🔌 AI 真實連線</h2>
 
-        <select id="selectedHero" class="field">
-          <option value="">尚無作品</option>
-        </select>
-
-        <div id="heroList"></div>
-
-        <textarea id="creationDescription"
-                  class="field"
-                  rows="3"
-                  placeholder="描述你的作品……"></textarea>
-
-        <button id="generateCreationWorld"
-                class="action"
-                disabled>生成想像世界</button>
-      </section>
-
-      <section>
-        <h2>STEP 06｜語音自由創造</h2>
-
-        <div id="chatLog"></div>
-
-        <textarea id="chatInput"
-                  class="field"
-                  rows="2"
-                  placeholder="讓角色變身、發動技能、創造故事……"
-                  disabled></textarea>
-
-        <div class="row">
-          <button id="micButton"
-                  class="action"
-                  disabled>🎙️ 說話</button>
-
-          <button id="sendButton"
-                  class="action primary"
-                  disabled>送出</button>
-        </div>
-
-        <input id="transformInput"
-               class="field"
-               placeholder="例如：長出彩虹翅膀"
-               disabled>
-
-        <div class="row">
-          <button id="transformButton"
-                  class="action"
-                  disabled>變身</button>
-
-          <button id="skillButton"
-                  class="action"
-                  disabled>技能</button>
-        </div>
-
-        <div class="row">
-          <button id="voiceButton"
-                  class="action"
-                  disabled>AI 語音</button>
-
-          <button id="stopVoice"
-                  class="action"
-                  disabled>停止播放</button>
-        </div>
-
-        <label for="aiVoiceVolume" class="muted">
-          AI 音量
-          <span id="aiVoiceVolumeValue">60%</span>
-        </label>
-
-        <input id="aiVoiceVolume"
-               type="range"
-               min="0"
-               max="100"
-               value="60"
-               style="width:100%"
-               disabled>
-      </section>
-
-    </div>
-  </aside>
-
-  <!-- 拍照視窗：後續接入攝影機 -->
-  <div id="cameraModal" class="modal hidden">
-    <div class="modalCard">
-      <h2>📷 拍攝 Plus-Plus 積木</h2>
-      <video id="cameraVideo"
-             autoplay
-             muted
-             playsinline></video>
-      <p id="cameraMessage" class="muted"></p>
-      <button id="captureButton" class="action primary">
-        拍照
-      </button>
-      <button id="switchCamera" class="action">
-        切換鏡頭
-      </button>
-      <button id="closeCamera" class="action">
-        關閉
-      </button>
-    </div>
-  </div>
-
-  <!-- 去背編輯視窗：後續接入 AI 去背 -->
-  <div id="editorModal" class="modal hidden">
-    <div class="modalCard">
-      <h2>✨ AI 去背</h2>
-      <canvas id="editCanvas"></canvas>
-
-      <button id="removeBgAI" class="action primary">
-        AI 去背
-      </button>
-
-      <button id="saveEditor" class="action">
-        確認作品
-      </button>
-
-      <button id="closeEditor" class="action">
-        關閉
-      </button>
-    </div>
-  </div>
-
-  <!-- AI 分類：孩子保留最終決定權 -->
-  <div id="classificationModal" class="modal hidden">
-    <div class="modalCard">
-      <h2>✨ 這是什麼作品？</h2>
-
-      <img id="classificationPreview"
-           alt="孩子的積木作品">
-
-      <p id="classificationMessage" class="muted">
-        AI 正在理解你的作品……
-      </p>
-
-      <textarea id="classificationDescription"
-                class="field"
-                rows="3"
-                placeholder="告訴 AI，你創造了什麼？"></textarea>
-
-      <div class="row">
-        <button id="classifyCharacter" class="action">
-          🐠 角色
-        </button>
-
-        <button id="classifyEnvironment" class="action">
-          🌳 環境
-        </button>
+      <div id="status">
+        正在初始化 Bridge……
       </div>
 
-      <button id="confirmClassification"
-              class="action primary">
-        確認
+      <button
+        id="testBridge"
+        class="action primary"
+      >
+        測試 OpenAI 真實連線
       </button>
-    </div>
+
+      <button
+        id="reloadBridge"
+        class="action"
+      >
+        重新連接 Bridge
+      </button>
+
+      <div id="aiTestResult">
+        等待測試。
+      </div>
+
+    </section>
+
+    <!-- STEP 01 -->
+    <section>
+
+      <h2>STEP 01｜自由拼接</h2>
+
+      <p class="muted">
+        使用 Plus-Plus 積木，自由創造角色、
+        建築、地形，或任何想像中的作品。
+      </p>
+
+    </section>
+
+    <!-- STEP 02 -->
+    <section>
+
+      <h2>STEP 02｜拍照與 AI 去背</h2>
+
+      <button
+        id="openCamera"
+        class="action comingSoon"
+      >
+        📷 拍攝作品
+      </button>
+
+      <button
+        id="uploadPhoto"
+        class="action comingSoon"
+      >
+        上傳照片
+      </button>
+
+      <input
+        id="photoFile"
+        type="file"
+        accept="image/*"
+        class="hidden"
+      >
+
+    </section>
+
+    <!-- STEP 03～05 -->
+    <section>
+
+      <h2>STEP 03～05｜共同世界</h2>
+
+      <p class="muted">
+        原始積木去背後立即進入世界，
+        保留造型與顏色。
+        角色、建築及環境會持續共存。
+      </p>
+
+      <select
+        id="selectedHero"
+        class="field"
+      >
+        <option value="">尚無作品</option>
+      </select>
+
+      <div id="heroList"></div>
+
+      <textarea
+        id="creationDescription"
+        class="field"
+        rows="3"
+        placeholder="描述你創造的作品……"
+      ></textarea>
+
+      <button
+        id="generateCreationWorld"
+        class="action comingSoon"
+      >
+        ✨ 生成想像世界
+      </button>
+
+    </section>
+
+    <!-- STEP 06 -->
+    <section>
+
+      <h2>STEP 06｜語音自由創造</h2>
+
+      <div id="chatLog">
+        <p class="muted">
+          之後可以透過語音要求角色變身、
+          增加技能、創造配角與故事。
+        </p>
+      </div>
+
+      <textarea
+        id="chatInput"
+        class="field"
+        rows="2"
+        placeholder="例如：讓我的角色長出彩虹翅膀"
+      ></textarea>
+
+      <div class="row">
+
+        <button
+          id="micButton"
+          class="action comingSoon"
+        >🎙️ 說話</button>
+
+        <button
+          id="sendButton"
+          class="action comingSoon"
+        >送出</button>
+
+      </div>
+
+      <input
+        id="transformInput"
+        class="field"
+        placeholder="例如：發射彩虹雷射"
+      >
+
+      <div class="row">
+
+        <button
+          id="transformButton"
+          class="action comingSoon"
+        >變身</button>
+
+        <button
+          id="skillButton"
+          class="action comingSoon"
+        >技能</button>
+
+      </div>
+
+      <div class="row">
+
+        <button
+          id="voiceButton"
+          class="action comingSoon"
+        >AI 語音</button>
+
+        <button
+          id="stopVoice"
+          class="action comingSoon"
+        >停止播放</button>
+
+      </div>
+
+      <label
+        for="aiVoiceVolume"
+        class="muted"
+      >
+        AI 音量
+        <span id="aiVoiceVolumeValue">60%</span>
+      </label>
+
+      <input
+        id="aiVoiceVolume"
+        type="range"
+        min="0"
+        max="100"
+        value="60"
+        style="width:100%"
+      >
+
+    </section>
+
   </div>
 
-  <!-- Google Apps Script Bridge -->
-  <iframe id="bridgeFrame"
-          title="Mindspace AI Bridge"></iframe>
+</aside>
 
-  <script>
-    "use strict";
+<!-- 拍照視窗 -->
+<div id="cameraModal" class="modal hidden">
 
-    /*
-      目前只啟用：
-      1. 工作台開關
-      2. Bridge 通訊
-      3. OpenAI 真實連線測試
+  <div class="modalCard">
 
-      其餘按鈕等待後續程式接入，
-      不使用假資料模擬成功。
-    */
+    <h2>📷 拍攝 Plus-Plus 作品</h2>
 
-    const GAS_URL =
-      "https://script.google.com/macros/s/AKfycbwUooMD69_NMBhTzxf0Os_D6BEGb3QsGyhXpTGv09emRcG_4du219K4qO_FggY1vnLHOg/exec";
+    <video
+      id="cameraVideo"
+      autoplay
+      muted
+      playsinline
+    ></video>
 
-    const APP = "mindspace-v2";
+    <p id="cameraMessage" class="muted"></p>
 
-    const $ = id =>
-      document.getElementById(id);
+    <button
+      id="captureButton"
+      class="action primary"
+    >拍照</button>
 
-    const token =
-      crypto.randomUUID();
+    <button
+      id="switchCamera"
+      class="action"
+    >切換鏡頭</button>
 
-    const pending =
-      new Map();
+    <button
+      id="closeCamera"
+      class="action"
+    >關閉</button>
 
-    let bridgeWindow = null;
-    let bridgeOrigin = "";
-    let bridgeReady = false;
+  </div>
 
-    function setStatus(message) {
-      $("status").textContent = message;
-    }
+</div>
 
-    function setResult(message) {
-      $("aiTestResult").textContent = message;
-    }
+<!-- 去背編輯視窗 -->
+<div id="editorModal" class="modal hidden">
 
-    /*
-      可收闔工作台
-    */
+  <div class="modalCard">
 
-    $("bubbleWorkbench").onclick = () => {
-      $("sidebar").classList.add("is-open");
-    };
+    <h2>✨ AI 去背</h2>
 
-    $("closeWorkbench").onclick = () => {
-      $("sidebar").classList.remove("is-open");
-    };
+    <canvas id="editCanvas"></canvas>
 
-    /*
-      Google Apps Script HTML Service
-      可能使用巢狀 iframe。
+    <button
+      id="removeBgAI"
+      class="action primary"
+    >AI 去背</button>
 
-      因此從 ready 訊息取得真正的
-      event.source，後續將請求送回
-      同一個視窗。
-    */
+    <button
+      id="saveEditor"
+      class="action"
+    >確認作品</button>
 
-    window.addEventListener("message", event => {
+    <button
+      id="closeEditor"
+      class="action"
+    >關閉</button>
 
-      if (
-        !/^https:\/\/script\.google(?:usercontent)?\.com$/
-          .test(event.origin)
-      ) {
-        return;
-      }
+  </div>
 
-      const message =
-        event.data || {};
+</div>
 
-      if (
-        message.app !== APP ||
-        message.token !== token
-      ) {
-        return;
-      }
+<!-- 作品分類視窗 -->
+<div id="classificationModal" class="modal hidden">
 
-      if (
-        message.kind === "ready"
-      ) {
-        bridgeWindow = event.source;
-        bridgeOrigin = event.origin;
-        bridgeReady = true;
+  <div class="modalCard">
 
-        setStatus(
-          "Bridge 已載入，尚未驗證 OpenAI"
-        );
+    <h2>✨ 這是什麼作品？</h2>
 
-        return;
-      }
+    <img
+      id="classificationPreview"
+      alt="Plus-Plus 積木作品"
+    >
 
-      if (
-        message.kind !== "response"
-      ) {
-        return;
-      }
+    <p
+      id="classificationMessage"
+      class="muted"
+    >
+      AI 正在理解你的作品……
+    </p>
 
-      if (
-        event.source !== bridgeWindow
-      ) {
-        return;
-      }
+    <textarea
+      id="classificationDescription"
+      class="field"
+      rows="3"
+      placeholder="告訴 AI，你創造了什麼？"
+    ></textarea>
 
-      const job =
-        pending.get(message.id);
+    <div class="row">
 
-      if (!job) return;
+      <button
+        id="classifyCharacter"
+        class="action"
+      >🐠 角色</button>
 
-      clearTimeout(job.timer);
-      pending.delete(message.id);
+      <button
+        id="classifyEnvironment"
+        class="action"
+      >🌳 環境</button>
 
-      if (message.ok) {
-        job.resolve(message.result);
-      } else {
-        job.reject(
-          new Error(
-            message.error ||
-            "AI 後端回應失敗"
-          )
-        );
-      }
+    </div>
 
-    });
+    <button
+      id="confirmClassification"
+      class="action primary"
+    >確認</button>
 
-    function requestAI(type, data = {}) {
-      if (!bridgeReady || !bridgeWindow) {
-        return Promise.reject(
-          new Error("Bridge 尚未連線")
-        );
-      }
+  </div>
 
-      const id =
-        crypto.randomUUID();
+</div>
 
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          pending.delete(id);
-          reject(new Error("AI 請求逾時"));
-        }, 90000);
+<!-- Google Apps Script Bridge -->
+<iframe
+  id="bridgeFrame"
+  title="Mindspace AI Bridge"
+></iframe>
 
-        pending.set(id, {
-          resolve,
-          reject,
-          timer
-        });
+<script>
+"use strict";
 
-        bridgeWindow.postMessage({
-          app: APP,
-          token,
-          kind: "request",
-          id,
-          type,
-          data
-        }, bridgeOrigin);
-      });
-    }
+/*
+  Mindspace Plus-Plus
+  index.html｜Bridge 修正版
 
-    /*
-      真正呼叫 OpenAI。
-      不使用固定測試結果。
-    */
+  已實作：
+  - 工作台開關
+  - Bridge 載入診斷
+  - Bridge 握手
+  - 真實 OpenAI 連線測試
 
-    $("testBridge").onclick = async () => {
-      const button = $("testBridge");
-      button.disabled = true;
+  尚未實作：
+  - 拍照與 AI 去背
+  - 積木進入 p5.js
+  - AI 分類與世界生成
+  - 語音自由創作
+*/
 
-      setStatus("正在測試 OpenAI……");
-      setResult("等待後端回應");
+const GAS_URL =
+  "https://script.google.com/macros/s/AKfycbwUooMD69_NMBhTzxf0Os_D6BEGb3QsGyhXpTGv09emRcG_4du219K4qO_FggY1vnLHOg/exec";
 
-      try {
-        const ping =
-          await requestAI("ping");
+const APP = "mindspace-v2";
 
-        const result =
-          await requestAI("checkAI");
+const $ = id =>
+  document.getElementById(id);
 
-        if (
-          !ping.alive ||
-          result.connected !== true ||
-          result.verified !== true
-        ) {
-          throw new Error(
-            "AI 未通過完整驗證"
-          );
-        }
+const pending = new Map();
 
-        setStatus(
-          "✅ OpenAI 真實連線成功"
-        );
+let bridgeToken = "";
+let bridgeReady = false;
+let bridgeWindow = null;
+let bridgeOrigin = "";
+let bridgeLoadTimer = null;
+let bridgeHandshakeTimer = null;
+let bridgeHelloTimer = null;
+let bridgeGeneration = 0;
 
-        setResult(
-          "模型：" + result.model + "\n" +
-          "請求 ID：" + result.responseId + "\n" +
-          "驗證碼：" + result.challenge + "\n" +
-          "AI 回答：" + result.text + "\n" +
-          "測試時間：" + result.checkedAt
-        );
+/*
+  允許的 Google Apps Script 來源。
+  不接受任意第三方網域。
+*/
 
-      } catch (error) {
-        setStatus(
-          "❌ AI 連線失敗"
-        );
+function isGoogleScriptOrigin(origin) {
+  try {
+    const url = new URL(origin);
 
-        setResult(
-          error.message
-        );
-
-      } finally {
-        button.disabled = false;
-      }
-    };
-
-    /*
-      初始化 Bridge。
-      必須在 message listener 安裝後
-      才設定 iframe.src。
-    */
-
-    const bridgeURL =
-      new URL(GAS_URL);
-
-    bridgeURL.searchParams.set(
-      "bridgeToken",
-      token
+    return (
+      url.protocol === "https:" &&
+      (
+        url.hostname === "script.google.com" ||
+        url.hostname === "script.googleusercontent.com" ||
+        url.hostname.endsWith(".googleusercontent.com")
+      )
     );
 
-    bridgeURL.searchParams.set(
-      "parentOrigin",
-      location.origin
-    );
+  } catch {
+    return false;
+  }
+}
 
-    $("bridgeFrame").src =
-      bridgeURL.toString();
+function setStatus(text, state = "") {
+  const el = $("status");
+
+  el.textContent = text;
+  el.className = state;
+}
+
+function setResult(text) {
+  $("aiTestResult").textContent = text;
+}
+
+function showComingSoon(name) {
+  $("speechBubble").textContent =
+    name + "將在下一階段接入真正的互動功能。";
+
+  setTimeout(() => {
+    $("speechBubble").textContent =
+      "用 Plus-Plus 積木，創造屬於你的想像世界！";
+  }, 3500);
+}
+
+/*
+  工作台
+*/
+
+$("bubbleWorkbench").onclick = () => {
+  $("sidebar").classList.add("is-open");
+};
+
+$("closeWorkbench").onclick = () => {
+  $("sidebar").classList.remove("is-open");
+};
+
+/*
+  尚未接入的功能只顯示狀態，
+  不假裝完成。
+*/
+
+const futureButtons = {
+  bubbleCamera: "拍照",
+  bubbleMic: "語音創作",
+  openCamera: "拍照",
+  uploadPhoto: "照片上傳",
+  generateCreationWorld: "AI 世界生成",
+  micButton: "語音辨識",
+  sendButton: "AI 對話",
+  transformButton: "角色變身",
+  skillButton: "角色技能",
+  voiceButton: "AI 語音",
+  stopVoice: "語音播放"
+};
+
+Object.entries(futureButtons).forEach(
+  ([id, name]) => {
+    $(id).onclick = () =>
+      showComingSoon(name);
+  }
+);
+
+$("aiVoiceVolume").oninput = event => {
+  $("aiVoiceVolumeValue").textContent =
+    event.target.value + "%";
+};
+
+/*
+  將未完成的視窗保留為後續接口。
+*/
+
+$("closeCamera").onclick = () => {
+  $("cameraModal").classList.add("hidden");
+};
+
+$("closeEditor").onclick = () => {
+  $("editorModal").classList.add("hidden");
+};
+
+/*
+  初始化 Bridge
+*/
+
+function connectBridge() {
+
+  bridgeGeneration++;
+  const generation = bridgeGeneration;
+
+  bridgeReady = false;
+  bridgeWindow = null;
+  bridgeOrigin = "";
+
+  clearTimeout(bridgeLoadTimer);
+  clearTimeout(bridgeHandshakeTimer);
+  clearInterval(bridgeHelloTimer);
+
+  for (const [id, job] of pending) {
+    clearTimeout(job.timer);
+    job.reject(
+      new Error("Bridge 已重新連接，原請求取消")
+    );
+  }
+
+  pending.clear();
+
+  bridgeToken = crypto.randomUUID();
+
+  setStatus(
+    "正在載入 Google Apps Script Bridge……"
+  );
+
+  setResult(
+    "等待 Bridge 載入。"
+  );
+
+  const frame = $("bridgeFrame");
+
+  const url = new URL(GAS_URL);
+
+  url.searchParams.set(
+    "bridgeToken",
+    bridgeToken
+  );
+
+  url.searchParams.set(
+    "parentOrigin",
+    location.origin
+  );
+
+  frame.onload = () => {
+    if (generation !== bridgeGeneration) {
+      return;
+    }
+
+    if (!bridgeReady) {
+      setStatus(
+        "Bridge iframe 已載入，正在等待握手……"
+      );
+    }
+  };
+
+  frame.onerror = () => {
+    if (generation !== bridgeGeneration) {
+      return;
+    }
 
     setStatus(
-      "正在載入 Google Apps Script Bridge……"
+      "Bridge iframe 載入失敗",
+      "error"
     );
-  </script>
+
+    setResult(
+      "請確認 GAS_URL 與 Web App 部署權限。"
+    );
+  };
+
+  frame.src = url.toString();
+
+  /*
+    主動發送 hello。
+    新版 Bridge.html 會回傳 ready。
+
+    使用 iframe.contentWindow 作為訊息目標，
+    不依賴第一次 ready 才能取得視窗。
+  */
+
+  bridgeHelloTimer = setInterval(() => {
+    if (
+      generation !== bridgeGeneration ||
+      bridgeReady
+    ) {
+      clearInterval(bridgeHelloTimer);
+      return;
+    }
+
+    try {
+      frame.contentWindow.postMessage({
+        app: APP,
+        token: bridgeToken,
+        kind: "hello"
+      }, "https://script.google.com");
+
+    } catch (error) {
+      console.warn(
+        "Bridge hello 尚未送達：",
+        error
+      );
+    }
+
+  }, 1000);
+
+  bridgeHandshakeTimer = setTimeout(() => {
+    if (
+      generation !== bridgeGeneration ||
+      bridgeReady
+    ) {
+      return;
+    }
+
+    setStatus(
+      "Bridge 握手逾時",
+      "error"
+    );
+
+    setResult(
+      "網頁沒有收到 Bridge 的 ready 訊號。\n\n" +
+      "請檢查：\n" +
+      "1. GAS_URL 是否為目前部署網址。\n" +
+      "2. Bridge.html 是否已部署為新增版本。\n" +
+      "3. Web App 存取權限是否允許網站使用。\n" +
+      "4. 瀏覽器是否封鎖第三方 iframe。\n" +
+      "5. GitHub Pages 網址是否在 Code.gs 的允許清單內。"
+    );
+
+  }, 15000);
+
+}
+
+/*
+  接收 Bridge 訊息。
+*/
+
+window.addEventListener(
+  "message",
+  event => {
+
+    if (!isGoogleScriptOrigin(event.origin)) {
+      return;
+    }
+
+    const message = event.data;
+
+    if (
+      !message ||
+      typeof message !== "object"
+    ) {
+      return;
+    }
+
+    if (message.app !== APP) {
+      return;
+    }
+
+    if (message.token !== bridgeToken) {
+      return;
+    }
+
+    /*
+      ready：
+      只代表 Bridge 通訊已就緒，
+      不代表 OpenAI 成功。
+    */
+
+    if (message.kind === "ready") {
+
+      bridgeWindow = event.source;
+      bridgeOrigin = event.origin;
+      bridgeReady = true;
+
+      clearTimeout(bridgeHandshakeTimer);
+      clearInterval(bridgeHelloTimer);
+
+      setStatus(
+        "Bridge 已連線，等待 OpenAI 測試"
+      );
+
+      setResult(
+        "Bridge 已建立通訊。\n" +
+        "請點擊「測試 OpenAI 真實連線」。"
+      );
+
+      return;
+    }
+
+    /*
+      回傳真正的後端結果。
+    */
+
+    if (message.kind !== "response") {
+      return;
+    }
+
+    if (
+      !bridgeReady ||
+      event.source !== bridgeWindow
+    ) {
+      return;
+    }
+
+    const job = pending.get(message.id);
+
+    if (!job) return;
+
+    clearTimeout(job.timer);
+    pending.delete(message.id);
+
+    if (message.ok === true) {
+      job.resolve(message.result);
+    } else {
+      job.reject(
+        new Error(
+          message.error ||
+          "Google Apps Script 回應失敗"
+        )
+      );
+    }
+
+  }
+);
+
+/*
+  向 Bridge 發送 AI 請求。
+*/
+
+function requestAI(type, data = {}) {
+
+  if (
+    !bridgeReady ||
+    !bridgeWindow
+  ) {
+    return Promise.reject(
+      new Error("Bridge 尚未連線")
+    );
+  }
+
+  const id = crypto.randomUUID();
+
+  return new Promise((resolve, reject) => {
+
+    const timer = setTimeout(() => {
+      pending.delete(id);
+
+      reject(
+        new Error(
+          "AI 請求逾時：" + type
+        )
+      );
+    }, 90000);
+
+    pending.set(id, {
+      resolve,
+      reject,
+      timer
+    });
+
+    try {
+      bridgeWindow.postMessage({
+        app: APP,
+        token: bridgeToken,
+        kind: "request",
+        id,
+        type,
+        data
+      }, bridgeOrigin);
+
+    } catch (error) {
+
+      clearTimeout(timer);
+      pending.delete(id);
+      reject(error);
+
+    }
+
+  });
+}
+
+/*
+  真實 OpenAI 測試。
+  必須同時通過 ping 與 checkAI。
+*/
+
+async function testAIConnection() {
+
+  const button = $("testBridge");
+
+  button.disabled = true;
+  button.textContent = "AI 測試中……";
+
+  try {
+
+    if (!bridgeReady) {
+      throw new Error(
+        "Bridge 尚未連線，請先按「重新連接 Bridge」。"
+      );
+    }
+
+    setStatus(
+      "正在檢查 Google Apps Script……"
+    );
+
+    const ping = await requestAI(
+      "ping"
+    );
+
+    if (!ping || ping.alive !== true) {
+      throw new Error(
+        "Google Apps Script ping 驗證失敗"
+      );
+    }
+
+    setStatus(
+      "Google Apps Script 已回應，正在呼叫 OpenAI……"
+    );
+
+    const result = await requestAI(
+      "checkAI"
+    );
+
+    if (
+      !result ||
+      result.connected !== true ||
+      result.verified !== true ||
+      !result.responseId
+    ) {
+      throw new Error(
+        "OpenAI 真實連線驗證未通過"
+      );
+    }
+
+    setStatus(
+      "✅ OpenAI 真實連線成功",
+      "success"
+    );
+
+    setResult(
+      "【AI 連線驗證成功】\n\n" +
+      "提供者：" + result.provider + "\n" +
+      "模型：" + result.model + "\n" +
+      "請求 ID：" + result.responseId + "\n" +
+      "驗證碼：" + result.challenge + "\n" +
+      "驗證時間：" + result.checkedAt + "\n\n" +
+      "【AI 真實回答】\n" +
+      result.text
+    );
+
+    $("speechBubble").textContent =
+      "AI 已經成功連線！準備創造你的 Mindspace！";
+
+  } catch (error) {
+
+    setStatus(
+      "❌ AI 連線失敗",
+      "error"
+    );
+
+    setResult(
+      "錯誤訊息：\n" +
+      error.message
+    );
+
+  } finally {
+
+    button.disabled = false;
+
+    button.textContent =
+      "測試 OpenAI 真實連線";
+
+  }
+
+}
+
+$("testBridge").onclick =
+  testAIConnection;
+
+$("reloadBridge").onclick =
+  connectBridge;
+
+/*
+  啟動 Bridge。
+*/
+
+connectBridge();
+
+</script>
 
 </body>
 </html>
