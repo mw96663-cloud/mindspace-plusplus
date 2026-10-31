@@ -4,25 +4,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport"
-        content="width=device-width,initial-scale=1,viewport-fit=cover">
+        content="width=device-width, initial-scale=1, viewport-fit=cover">
 
-  <title>Mindspace｜Plus-Plus 想像世界</title>
+  <meta name="theme-color" content="#071827">
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js"></script>
+  <title>Mindspace Plus-Plus｜想像有形</title>
 
   <style>
-    * {
-      box-sizing: border-box;
+    :root {
+      --bg: #071827;
+      --panel: rgba(13, 31, 49, 0.94);
+      --panel-light: rgba(255,255,255,0.09);
+      --line: rgba(255,255,255,0.15);
+      --text: #f7fbff;
+      --muted: #aec4d4;
+      --blue: #71c9ff;
+      --pink: #ff91bd;
+      --yellow: #ffd86d;
+      --green: #9de6b4;
+      --radius: 20px;
+      --workbench-width: 365px;
     }
 
-    :root {
-      --purple: #e9e0f6;
-      --ink: #44394f;
-      --pink: #ffe0ec;
-      --blue: #dcefff;
-      --mint: #dff7e7;
-      --yellow: #fff0c8;
-      --panel: rgba(255,255,255,.95);
+    * {
+      box-sizing: border-box;
     }
 
     html,
@@ -30,118 +35,72 @@
       width: 100%;
       height: 100%;
       margin: 0;
-    }
-
-    body {
+      padding: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
       font-family:
         "Noto Sans TC",
         "Microsoft JhengHei",
+        system-ui,
         sans-serif;
-
-      background: var(--purple);
-      color: var(--ink);
-      overflow: hidden;
     }
 
     button,
     input,
-    select,
     textarea {
       font: inherit;
     }
 
     button {
       cursor: pointer;
-      border: none;
-      border-radius: 13px;
-      padding: 11px 13px;
-      font-weight: 700;
-      color: #51435e;
-      transition:
-        opacity .2s,
-        transform .2s,
-        box-shadow .2s;
-    }
-
-    button:hover {
-      opacity: .88;
-    }
-
-    button:active {
-      transform: scale(.97);
-    }
-
-    button:focus-visible,
-    textarea:focus-visible,
-    select:focus-visible {
-      outline: 3px solid #9875df;
-      outline-offset: 2px;
+      border: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
     button:disabled {
-      opacity: .5;
-      cursor: wait;
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
-    .pink {
-      background: var(--pink);
-    }
-
-    .blue {
-      background: var(--blue);
-    }
-
-    .mint {
-      background: var(--mint);
-    }
-
-    .yellow {
-      background: var(--yellow);
-    }
-
-    .full {
-      width: 100%;
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible {
+      outline: 3px solid var(--yellow);
+      outline-offset: 2px;
     }
 
     .hidden {
       display: none !important;
     }
 
-    .app {
-      display: flex;
-      width: 100%;
-      height: 100dvh;
-      position: relative;
-      overflow: hidden;
-    }
+    /* ========================================
+       滿版互動世界
+    ======================================== */
 
-    .world {
-      position: relative;
-      flex: 1;
-      min-width: 0;
+    #app {
+      position: fixed;
+      inset: 0;
+      width: 100%;
       height: 100%;
       overflow: hidden;
       isolation: isolate;
-
-      background:
-        radial-gradient(
-          ellipse at 50% 25%,
-          #e3f6ff 0%,
-          #a4ddf5 55%,
-          #79b5e2 100%
-        );
+      background: var(--bg);
     }
 
-    #scene {
+    #world {
       position: absolute;
       inset: 0;
-      z-index: 0;
+      width: 100%;
+      height: 100%;
       overflow: hidden;
-      pointer-events: none;
-    }
-
-    #scene canvas {
-      display: block;
+      background:
+        radial-gradient(
+          ellipse at 50% 65%,
+          #225b76 0%,
+          #10354e 45%,
+          #071827 100%
+        );
     }
 
     #plusPlusBackground {
@@ -150,995 +109,1101 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      pointer-events: none;
+      object-position: center;
       z-index: 1;
+      pointer-events: none;
+    }
+
+    #scene {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      overflow: hidden;
+      pointer-events: none;
     }
 
     #plusPlusEnvironmentLayer {
       position: absolute;
       inset: 0;
-      z-index: 2;
+      width: 100%;
+      height: 100%;
       pointer-events: none;
+      overflow: hidden;
     }
 
     #actors {
       position: absolute;
       inset: 0;
-      z-index: 4;
+      width: 100%;
+      height: 100%;
       pointer-events: none;
-    }
-
-    #actors > * {
-      pointer-events: auto;
+      overflow: hidden;
     }
 
     #plusPlusEffectLayer {
       position: absolute;
       inset: 0;
-      z-index: 7;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
+      pointer-events: none;
       overflow: hidden;
-      pointer-events: none;
     }
 
-    #worldTitle {
+    #worldCanvas {
       position: absolute;
-      top: 22px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10;
-
-      max-width: 75%;
-      padding: 12px 24px;
-
-      background: rgba(255,255,255,.86);
-      border-radius: 24px;
-      box-shadow: 0 5px 20px rgba(40,40,70,.09);
-
-      font-size: 18px;
-      font-weight: 800;
-      text-align: center;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 4;
       pointer-events: none;
     }
+
+    /* ========================================
+       上方標題
+    ======================================== */
+
+    #topBar {
+      position: absolute;
+      z-index: 30;
+      top: max(16px, env(safe-area-inset-top));
+      left: 20px;
+      right: 20px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .brand {
+      padding: 12px 17px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(5,20,34,0.62);
+      backdrop-filter: blur(14px);
+    }
+
+    .brand-title {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    .top-button {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: white;
+      background: rgba(5,20,34,0.72);
+      backdrop-filter: blur(12px);
+    }
+
+    /* ========================================
+       AI 語音泡泡
+    ======================================== */
 
     #speechBubble {
       position: absolute;
+      z-index: 20;
       left: 50%;
-      bottom: 26px;
+      bottom: 110px;
       transform: translateX(-50%);
-      z-index: 10;
-
-      width: max-content;
-      max-width: min(85%,650px);
-      min-height: 48px;
-
-      padding: 13px 22px;
-      border-radius: 20px;
-
-      background: rgba(255,255,255,.94);
-      box-shadow: 0 6px 24px rgba(40,40,70,.12);
-
+      max-width: min(600px, calc(100vw - 40px));
+      padding: 15px 22px;
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 22px;
+      background: rgba(5,22,38,0.88);
+      backdrop-filter: blur(16px);
       text-align: center;
-      font-size: 16px;
-      line-height: 1.6;
+      font-size: 17px;
+      line-height: 1.65;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
       pointer-events: none;
     }
 
-    .sidebar {
-      width: 365px;
-      flex: 0 0 365px;
-      height: 100%;
-      overflow-y: auto;
-
-      padding: 22px 19px 100px;
-
-      background: var(--panel);
-      border-left: 1px solid rgba(120,100,150,.12);
-
-      position: relative;
-      z-index: 20;
-
-      transition:
-        width .25s ease,
-        flex-basis .25s ease,
-        padding .25s ease;
+    #speechBubble:empty {
+      display: none;
     }
 
-    .sidebar.collapsed {
-      width: 0;
-      flex-basis: 0;
-      padding-left: 0;
-      padding-right: 0;
-      overflow: hidden;
-      border: 0;
-    }
+    /* ========================================
+       底部語音控制
+    ======================================== */
 
-    .sidebar h1 {
-      font-size: 28px;
-      margin: 0 0 6px;
-    }
-
-    .subtitle {
-      margin: 0 0 18px;
-      color: #80718d;
-      font-size: 13px;
-    }
-
-    .section {
-      background: #fff;
-      border: 1px solid #eee6f5;
-      border-radius: 20px;
-
-      padding: 17px;
-      margin-bottom: 16px;
-
-      box-shadow: 0 4px 18px rgba(80,50,110,.04);
-    }
-
-    .section h2 {
-      font-size: 17px;
-      margin: 0 0 12px;
-    }
-
-    .section p {
-      line-height: 1.6;
-    }
-
-    .hint {
-      font-size: 13px;
-      color: #81738e;
-      line-height: 1.6;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 9px;
-      margin: 10px 0;
-    }
-
-    .actions {
+    #voiceDock {
+      position: absolute;
+      z-index: 35;
+      bottom: max(22px, env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
-      flex-wrap: wrap;
-      gap: 9px;
-      margin-top: 12px;
+      align-items: center;
+      gap: 10px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(6,22,36,0.82);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 12px 35px rgba(0,0,0,0.25);
     }
 
-    .actions button {
-      flex: 1 1 120px;
+    .voice-button {
+      min-width: 60px;
+      min-height: 60px;
+      border-radius: 50%;
+      background:
+        linear-gradient(145deg, #a7e5ff, #67b5f4);
+      color: #09273d;
+      font-size: 27px;
+      box-shadow: 0 4px 18px rgba(113,201,255,0.25);
+    }
+
+    .voice-button.recording {
+      background:
+        linear-gradient(145deg, #ffafc6, #ff5f8f);
+      animation: recordingPulse 1s ease-in-out infinite;
+    }
+
+    @keyframes recordingPulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(255,95,143,0.4);
+      }
+
+      50% {
+        box-shadow: 0 0 0 13px rgba(255,95,143,0);
+      }
+    }
+
+    #voiceStatus {
+      font-size: 13px;
+      color: var(--text);
+      min-width: 90px;
+      max-width: 180px;
+      line-height: 1.4;
+      padding-right: 12px;
+    }
+
+    /* ========================================
+       泡泡工作台開關
+    ======================================== */
+
+    #mobileToggle {
+      position: absolute;
+      z-index: 100;
+      right: 24px;
+      bottom: max(24px, env(safe-area-inset-bottom));
+      width: 76px;
+      height: 76px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: #15344b;
+      background:
+        radial-gradient(
+          circle at 30% 25%,
+          #ffffff 0%,
+          #bcecff 24%,
+          #77c9ff 65%,
+          #5b9ce8 100%
+        );
+      box-shadow:
+        inset -5px -7px 15px rgba(40,92,160,0.18),
+        0 8px 28px rgba(65,166,255,0.45);
+      font-size: 30px;
+      transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+    }
+
+    #mobileToggle:hover {
+      transform: scale(1.07);
+    }
+
+    #mobileToggle[aria-expanded="true"] {
+      background:
+        radial-gradient(
+          circle at 30% 25%,
+          #fff,
+          #ffe4a8 35%,
+          #ffbe78 100%
+        );
+    }
+
+    /* ========================================
+       可收合工作台
+    ======================================== */
+
+    #sidebar {
+      position: absolute;
+      z-index: 90;
+      top: 82px;
+      right: 20px;
+      bottom: 116px;
+      width: min(
+        var(--workbench-width),
+        calc(100vw - 40px)
+      );
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 24px;
+      background: var(--panel);
+      backdrop-filter: blur(24px);
+      box-shadow: 0 18px 55px rgba(0,0,0,0.32);
+      overflow: hidden;
+      transform: translateX(calc(100% + 50px));
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition:
+        transform 0.28s ease,
+        opacity 0.28s ease,
+        visibility 0.28s ease;
+    }
+
+    #sidebar.open {
+      transform: translateX(0);
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .sidebar-header {
+      flex-shrink: 0;
+      padding: 19px 20px 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .sidebar-header h2 {
+      margin: 0;
+      font-size: 19px;
+    }
+
+    .sidebar-content {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 16px;
+      scrollbar-width: thin;
+    }
+
+    .panel-section {
+      margin-bottom: 15px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.045);
+    }
+
+    .panel-section h3 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      color: var(--yellow);
+    }
+
+    .panel-section p {
+      margin: 6px 0 12px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .button-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .btn {
+      width: 100%;
+      min-height: 45px;
+      padding: 11px 12px;
+      border-radius: 13px;
+      background: var(--panel-light);
+      color: var(--text);
+      border: 1px solid var(--line);
+      font-size: 13px;
+      font-weight: 650;
+      transition: background 0.15s ease;
+    }
+
+    .btn:hover {
+      background: rgba(255,255,255,0.16);
+    }
+
+    .btn-primary {
+      color: #0a2c40;
+      background: var(--blue);
+      border-color: transparent;
+    }
+
+    .btn-primary:hover {
+      background: #a4e0ff;
+    }
+
+    .btn-pink {
+      color: #402036;
+      background: var(--pink);
+      border-color: transparent;
+    }
+
+    .btn-yellow {
+      color: #493600;
+      background: var(--yellow);
+      border-color: transparent;
+    }
+
+    .btn-green {
+      color: #173a2b;
+      background: var(--green);
+      border-color: transparent;
+    }
+
+    .btn-full {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
     }
 
     textarea,
-    select,
     input[type="text"] {
       width: 100%;
-      border: 1px solid #ddd3e8;
-      border-radius: 12px;
-      padding: 11px;
-      background: #fff;
-      color: var(--ink);
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 82px;
-      line-height: 1.6;
-    }
-
-    select {
-      min-height: 43px;
-      margin-bottom: 9px;
-    }
-
-    #heroList {
-      padding: 10px;
-      border: 1px dashed #ded1eb;
+      padding: 12px 13px;
+      border: 1px solid var(--line);
       border-radius: 13px;
-      min-height: 48px;
-      margin-bottom: 10px;
-      font-size: 13px;
-    }
-
-    #chatLog {
-      max-height: 220px;
-      min-height: 70px;
-      overflow-y: auto;
-      padding: 10px;
-      margin: 8px 0 12px;
-      border-radius: 12px;
-      background: #f9f5fd;
-      font-size: 13px;
+      background: rgba(0,0,0,0.22);
+      color: white;
+      resize: vertical;
       line-height: 1.6;
+      font-size: 14px;
     }
 
-    #status {
+    textarea::placeholder,
+    input::placeholder {
+      color: #a5b9c7;
+    }
+
+    .status {
       margin-top: 10px;
-      padding: 12px;
-      background: #f8f4fc;
-      border-radius: 12px;
-      font-size: 13px;
-      line-height: 1.6;
+      font-size: 12px;
+      line-height: 1.65;
+      color: var(--muted);
+      white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
 
-    .mode-button {
-      border: 2px solid transparent;
-    }
+    /* ========================================
+       攝影機 / 照片預覽
+    ======================================== */
 
-    .mode-button[aria-pressed="true"] {
-      border-color: #a17de3;
-      box-shadow: 0 0 0 2px rgba(161,125,227,.15);
-    }
-
-    #creationModeHint {
-      min-height: 40px;
-    }
-
-    .teacher-background {
-      margin: 12px 0;
-      padding: 12px;
-      background: #f9f5fd;
-      border-radius: 12px;
-    }
-
-    .teacher-background label {
-      display: block;
-      font-size: 13px;
-      margin-bottom: 8px;
-    }
-
-    .teacher-background input {
+    #cameraPreview,
+    #photoPreview,
+    #cutoutPreview {
       width: 100%;
-      margin-bottom: 10px;
-    }
-
-    #fullscreenButton,
-    #mobileToggle {
-      position: fixed;
-      z-index: 50;
-      bottom: 16px;
-
-      background: rgba(255,255,255,.96);
-      box-shadow: 0 4px 18px rgba(0,0,0,.13);
-    }
-
-    #fullscreenButton {
-      left: 16px;
-    }
-
-    #mobileToggle {
-      right: 16px;
-    }
-
-    #bridgeFrame {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      opacity: 0;
-      pointer-events: none;
-      border: 0;
-    }
-
-    .modal {
-      position: fixed;
-      inset: 0;
-      z-index: 100;
-
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      padding: 18px;
-      background: rgba(38,30,52,.65);
-    }
-
-    .dialog {
-      width: min(100%,740px);
-      max-height: 94dvh;
-      overflow-y: auto;
-
-      background: #fff;
-      border-radius: 22px;
-      padding: 22px;
-
-      box-shadow: 0 20px 70px rgba(0,0,0,.22);
-    }
-
-    .dialog h2 {
-      margin-top: 0;
-    }
-
-    #cameraVideo {
-      display: block;
-      width: 100%;
-      max-height: 55dvh;
+      max-height: 235px;
+      margin-top: 10px;
+      border-radius: 13px;
       object-fit: contain;
-      border-radius: 15px;
-      background: #222;
-    }
-
-    #editCanvas {
-      display: block;
-      width: 100%;
-      max-height: 55dvh;
-      object-fit: contain;
-      border-radius: 14px;
       background:
-        conic-gradient(
-          #eee 25%,
-          #fff 0 50%,
-          #eee 0 75%,
-          #fff 0
-        ) 0 0 / 24px 24px;
+        linear-gradient(45deg, #354451 25%, transparent 25%),
+        linear-gradient(-45deg, #354451 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #354451 75%),
+        linear-gradient(-45deg, transparent 75%, #354451 75%);
+      background-color: #273441;
+      background-size: 20px 20px;
+      background-position:
+        0 0,
+        0 10px,
+        10px -10px,
+        -10px 0;
+    }
 
+    #cameraPreview {
+      transform: scaleX(-1);
+    }
+
+    #cutoutCanvas {
+      display: block;
+      width: 100%;
+      max-height: 235px;
+      margin-top: 10px;
+      border-radius: 13px;
+      background: #263947;
       touch-action: none;
     }
 
-    #brushSize {
+    /* ========================================
+       生成進度
+    ======================================== */
+
+    #creationProgress {
+      position: absolute;
+      z-index: 60;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(440px, calc(100vw - 40px));
+      padding: 25px;
+      border-radius: 23px;
+      border: 1px solid var(--line);
+      background: rgba(5,22,38,0.94);
+      text-align: center;
+      box-shadow: 0 20px 65px rgba(0,0,0,0.4);
+      backdrop-filter: blur(16px);
+    }
+
+    .loader {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 16px;
+      border: 4px solid rgba(255,255,255,0.15);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ========================================
+       角色列表
+    ======================================== */
+
+    #heroList {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .hero-item {
+      width: 72px;
+      min-height: 84px;
+      padding: 7px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.07);
+      color: white;
+      font-size: 11px;
+    }
+
+    .hero-item img {
       display: block;
       width: 100%;
-      margin: 10px 0;
+      height: 52px;
+      object-fit: contain;
     }
 
-    .creation-progress {
-      margin-top: 10px;
-      font-size: 13px;
-      color: #765e8e;
-    }
+    /* ========================================
+       手機 / 平板
+    ======================================== */
 
-    @media (max-width: 850px) {
-      .sidebar {
-        position: fixed;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        width: min(365px,94vw);
-        height: 100dvh;
-        flex-basis: auto;
-        box-shadow: -8px 0 35px rgba(0,0,0,.12);
-      }
-
-      .sidebar.collapsed {
-        width: 0;
-      }
-
-      #worldTitle {
+    @media (max-width: 700px) {
+      #topBar {
+        left: 12px;
+        right: 12px;
         top: 12px;
+      }
+
+      .brand {
+        padding: 9px 12px;
+      }
+
+      .brand-title {
         font-size: 15px;
-        padding: 10px 15px;
+      }
+
+      .brand-subtitle {
+        font-size: 10px;
+      }
+
+      #sidebar {
+        top: 70px;
+        right: 10px;
+        bottom: 102px;
+        width: min(355px, calc(100vw - 20px));
+      }
+
+      #mobileToggle {
+        right: 14px;
+        bottom: 16px;
+        width: 64px;
+        height: 64px;
+      }
+
+      #voiceDock {
+        left: 12px;
+        transform: none;
+        bottom: 17px;
+      }
+
+      .voice-button {
+        min-width: 52px;
+        min-height: 52px;
+      }
+
+      #voiceStatus {
+        max-width: 120px;
+        font-size: 12px;
       }
 
       #speechBubble {
-        bottom: 74px;
+        bottom: 95px;
         font-size: 14px;
-      }
-
-      .dialog {
-        padding: 16px;
+        padding: 12px 16px;
       }
     }
 
-    @media (prefers-reduced-motion: reduce) {
-      button,
-      .sidebar {
-        transition: none;
-      }
+    /* ========================================
+       全螢幕相容
+       工作台、語音、攝影機均位於 #app 內
+    ======================================== */
+
+    #app:fullscreen,
+    #app:-webkit-full-screen {
+      width: 100vw;
+      height: 100vh;
+      background: var(--bg);
+    }
+
+    #app:fullscreen #world,
+    #app:-webkit-full-screen #world {
+      width: 100%;
+      height: 100%;
     }
   </style>
 </head>
 
 <body>
 
-  <div class="app" id="app">
+  <!--
+    全螢幕容器：
+    將所有操作介面放在 #app 裡，
+    讓全螢幕時仍然可以使用攝影機和語音按鈕。
+  -->
 
-    <!-- ======================================
-         互動世界
-    ======================================= -->
+  <main id="app">
 
-    <main class="world" id="world">
+    <!-- ==============================
+         滿版 Plus-Plus 世界
+    =============================== -->
 
-      <!-- 保留一評 p5.js 場景容器 -->
-      <div id="scene"></div>
+    <section id="world" aria-label="Plus-Plus 數位世界">
 
-      <!-- Plus-Plus AI 生成背景 -->
       <img
         id="plusPlusBackground"
         alt=""
         class="hidden"
       >
 
-      <!-- AI 延伸場景物件 -->
-      <div id="plusPlusEnvironmentLayer"></div>
+      <div id="scene">
 
-      <!-- 保留一評角色容器 -->
-      <div id="actors"></div>
+        <div id="plusPlusEnvironmentLayer"></div>
 
-      <!-- 積木技能與粒子效果 -->
-      <div id="plusPlusEffectLayer"></div>
+        <div id="actors"></div>
 
-      <div id="worldTitle">
-        🧩 Mindspace｜Plus-Plus 想像世界
+        <canvas id="worldCanvas"></canvas>
+
+        <div id="plusPlusEffectLayer"></div>
+
       </div>
 
-      <div id="speechBubble">
-        ✨ 一起讓你的積木創作活起來！
+    </section>
+
+    <!-- ==============================
+         頂部品牌 / 全螢幕
+    =============================== -->
+
+    <header id="topBar">
+
+      <div class="brand">
+        <div class="brand-title">
+          Mindspace Plus-Plus
+        </div>
+
+        <div class="brand-subtitle">
+          想像有形・讓創作成為世界
+        </div>
       </div>
 
-    </main>
-
-    <!-- ======================================
-         側邊控制面板
-    ======================================= -->
-
-    <aside class="sidebar" id="sidebar">
-
-      <h1>🧩 Mindspace</h1>
-
-      <p class="subtitle">
-        Plus-Plus × 想像 × AI 互動探索
-      </p>
-
-      <!-- ====================================
-           創作模式
-      ===================================== -->
-
-      <section class="section" id="creationModeSection">
-
-        <h2>🌈 選擇創作模式</h2>
-
-        <p class="hint">
-          你的積木作品想成為一個角色，
-          還是成為世界的一部分？
-        </p>
-
-        <div class="grid">
-
-          <button
-            id="characterModeButton"
-            class="pink mode-button"
-            type="button"
-            aria-pressed="true"
-          >
-            🧸 Character｜角色
-          </button>
-
-          <button
-            id="environmentModeButton"
-            class="blue mode-button"
-            type="button"
-            aria-pressed="false"
-          >
-            🌍 Environment｜背景
-          </button>
-
-        </div>
-
-        <p id="creationModeHint" class="hint">
-          角色模式：保留原始積木造型，
-          讓角色進入世界、移動並接受語音創作。
-        </p>
-
-        <textarea
-          id="creationDescription"
-          placeholder="這是什麼作品？例如：這是一隻會飛的彩虹龍，牠住在天空上的積木城堡。"
-        ></textarea>
+      <div class="top-actions">
 
         <button
-          id="generateCreationWorld"
-          class="full mint"
+          id="fullscreenButton"
+          class="top-button"
           type="button"
+          title="切換全螢幕"
+          aria-label="切換全螢幕"
         >
-          ✨ 生成 Plus-Plus 想像世界
+          ⛶
         </button>
 
-        <p
-          id="creationProgress"
-          class="creation-progress"
-          aria-live="polite"
-        ></p>
+      </div>
 
-      </section>
+    </header>
 
-      <!-- ====================================
-           原始積木角色
-      ===================================== -->
+    <!-- ==============================
+         AI / 角色語音泡泡
+    =============================== -->
 
-      <section class="section">
+    <div
+      id="speechBubble"
+      role="status"
+      aria-live="polite"
+    ></div>
 
-        <h2>📸 我的 Plus-Plus 作品</h2>
+    <!-- ==============================
+         主要語音按鈕
+         收合工作台後仍可使用
+    =============================== -->
 
-        <div id="heroList">
-          還沒有積木作品
-        </div>
+    <div id="voiceDock">
 
-        <div class="grid">
+      <button
+        id="voiceButton"
+        class="voice-button"
+        type="button"
+        title="按下開始語音創作"
+        aria-label="開始語音創作"
+      >
+        🎤
+      </button>
 
-          <button
-            id="openCamera"
-            class="pink"
-            type="button"
-          >
-            📸 拍照
-          </button>
+      <div id="voiceStatus">
+        點擊麥克風，開始創作
+      </div>
 
-          <button
-            id="uploadPhoto"
-            class="yellow"
-            type="button"
-          >
-            🖼️ 上傳照片
-          </button>
+    </div>
 
-          <button
-            id="editHero"
-            class="blue"
-            type="button"
-          >
-            🪄 修改去背
-          </button>
+    <!-- ==============================
+         泡泡工作台按鈕
+    =============================== -->
 
-          <button
-            id="deleteHero"
-            class="mint"
-            type="button"
-          >
-            🗑️ 移除作品
-          </button>
+    <button
+      id="mobileToggle"
+      type="button"
+      aria-label="開啟創作工作台"
+      aria-controls="sidebar"
+      aria-expanded="false"
+      title="開啟或收合工作台"
+    >
+      ✦
+    </button>
 
-        </div>
+    <!-- ==============================
+         可收合創作工作台
+    =============================== -->
+
+    <aside
+      id="sidebar"
+      aria-label="創作工作台"
+    >
+
+      <div class="sidebar-header">
+
+        <h2>🫧 創作工作台</h2>
 
         <button
-          id="inspectHero"
-          class="full blue"
+          id="closeWorkbench"
+          class="top-button"
           type="button"
+          aria-label="收合工作台"
         >
-          🧠 AI 觀察積木作品
+          ✕
         </button>
 
-        <p id="appearance" class="hint"></p>
+      </div>
 
-      </section>
+      <div class="sidebar-content">
 
-      <!-- ====================================
-           AI 語音與自由創作
-      ===================================== -->
+        <!-- ==========================
+             01 攝影機
+        =========================== -->
 
-      <section class="section">
+        <section class="panel-section">
 
-        <h2>🎤 和你的積木世界說話</h2>
+          <h3>01｜拍攝你的積木創作</h3>
 
-        <select id="selectedHero">
-          <option value="">
-            請先建立作品
-          </option>
-        </select>
+          <p>
+            使用 Plus-Plus 積木創作任何造型，
+            拍照後 AI 會理解你的作品。
+          </p>
 
-        <div id="chatLog"></div>
+          <div class="button-grid">
 
-        <textarea
-          id="chatInput"
-          placeholder="自由說出任何想法，例如：讓我的龍頭上長出一棵會發光的樹，然後帶牠飛到彩虹上。"
-        ></textarea>
+            <button
+              id="startCamera"
+              class="btn btn-primary"
+              type="button"
+            >
+              📷 開啟鏡頭
+            </button>
 
-        <div class="grid">
+            <button
+              id="capturePhoto"
+              class="btn btn-yellow"
+              type="button"
+            >
+              ✨ 拍攝作品
+            </button>
 
-          <button
-            id="micButton"
-            class="pink"
-            type="button"
-          >
-            🎙️ 開始說話
-          </button>
+            <button
+              id="stopCamera"
+              class="btn"
+              type="button"
+            >
+              關閉鏡頭
+            </button>
 
-          <button
-            id="sendButton"
-            class="blue"
-            type="button"
-          >
-            💬 送出想法
-          </button>
+            <button
+              id="uploadPhotoButton"
+              class="btn"
+              type="button"
+            >
+              上傳照片
+            </button>
 
-          <button
-            id="voiceButton"
-            class="mint"
-            type="button"
-          >
-            🔊 語音：開
-          </button>
-
-          <button
-            id="stopVoice"
-            class="yellow"
-            type="button"
-          >
-            ⏹️ 停止語音
-          </button>
-
-        </div>
-
-        <p class="hint">
-          不需要使用固定指令。
-          AI 會理解你的描述，
-          自行規劃積木造型、技能、動作與場景。
-        </p>
-
-      </section>
-
-      <!-- ====================================
-           造型延伸與技能
-           保留一評 ID
-      ===================================== -->
-
-      <section class="section">
-
-        <h2>✨ AI 積木造型與技能</h2>
-
-        <textarea
-          id="transformInput"
-          placeholder="例如：幫我的積木角色加上會發光的翅膀，但原本的身體不要改變。"
-        ></textarea>
-
-        <div class="grid">
-
-          <button
-            id="transformButton"
-            class="pink"
-            type="button"
-          >
-            ✨ AI 延伸造型
-          </button>
-
-          <button
-            id="restoreButton"
-            class="blue"
-            type="button"
-          >
-            ↩️ 原始造型
-          </button>
-
-          <button
-            id="showTransform"
-            class="mint"
-            type="button"
-          >
-            👀 顯示延伸造型
-          </button>
-
-          <button
-            id="skillButton"
-            class="yellow"
-            type="button"
-          >
-            ⚡ 表演技能
-          </button>
-
-        </div>
-
-        <p class="hint">
-          原始積木照片保持不變。
-          AI 生成的新造型會以獨立圖層附加。
-        </p>
-
-      </section>
-
-      <!-- ====================================
-           世界與背景
-      ===================================== -->
-
-      <section class="section">
-
-        <h2>🌍 探索世界</h2>
-
-        <select id="worldSelect">
-          <option value="ocean">
-            🌊 海底世界
-          </option>
-
-          <option value="forest">
-            🌳 森林世界
-          </option>
-
-          <option value="space">
-            🚀 太空世界
-          </option>
-        </select>
-
-        <div class="teacher-background">
-
-          <label for="teacherBg">
-            🖼️ 自訂背景圖片
-          </label>
+          </div>
 
           <input
-            id="teacherBg"
+            id="photoInput"
             type="file"
             accept="image/*"
+            class="hidden"
           >
+
+          <video
+            id="cameraPreview"
+            autoplay
+            muted
+            playsinline
+            class="hidden"
+          ></video>
+
+          <canvas
+            id="captureCanvas"
+            class="hidden"
+          ></canvas>
+
+          <img
+            id="photoPreview"
+            alt="原始積木照片"
+            class="hidden"
+          >
+
+          <div
+            id="cameraStatus"
+            class="status"
+            role="status"
+          >
+            尚未開啟鏡頭。
+          </div>
+
+        </section>
+
+        <!-- ==========================
+             02 去背
+        =========================== -->
+
+        <section class="panel-section">
+
+          <h3>02｜AI 自動去背</h3>
+
+          <p>
+            保留你親手製作的積木形狀與顏色，
+            去除照片背景。
+          </p>
 
           <button
-            id="clearTeacherBg"
-            class="full blue"
+            id="aiRemoveBgButton"
+            class="btn btn-pink btn-full"
             type="button"
           >
-            ↩️ 恢復預設背景
+            ✨ AI 自動去背
           </button>
 
-        </div>
+          <div class="button-grid" style="margin-top:9px">
 
-        <button
-          id="resetButton"
-          class="full yellow"
-          type="button"
-        >
-          🌱 開始新創作
-        </button>
+            <button
+              id="manualRemoveBgButton"
+              class="btn"
+              type="button"
+            >
+              手動修整
+            </button>
 
-      </section>
+            <button
+              id="undoRemoveBgButton"
+              class="btn"
+              type="button"
+            >
+              復原
+            </button>
 
-      <!-- ====================================
-           AI 連線
-      ===================================== -->
+          </div>
 
-      <section class="section">
+          <canvas
+            id="cutoutCanvas"
+            class="hidden"
+            aria-label="去背修整畫布"
+          ></canvas>
 
-        <h2>🔌 AI 系統狀態</h2>
+          <img
+            id="cutoutPreview"
+            alt="去背後的原始積木作品"
+            class="hidden"
+          >
 
-        <button
-          id="testBridge"
-          class="full mint"
-          type="button"
-        >
-          🔍 測試 AI 連線
-        </button>
+          <div
+            id="removeBgStatus"
+            class="status"
+            role="status"
+          >
+            請先拍攝或上傳積木照片。
+          </div>
 
-        <div id="status" aria-live="polite">
-          等待系統啟動……
-        </div>
+        </section>
 
-      </section>
+        <!-- ==========================
+             03 AI 自動理解
+        =========================== -->
+
+        <section class="panel-section">
+
+          <h3>03｜讓積木進入世界</h3>
+
+          <p>
+            你可以告訴 AI 這是什麼，
+            也可以讓 AI 先觀察。
+            不需要選擇角色或背景。
+          </p>
+
+          <textarea
+            id="creationDescription"
+            rows="3"
+            placeholder="例如：這是一隻會飛的藍色魚，喜歡在雲朵裡探險……"
+          ></textarea>
+
+          <button
+            id="generateCreationWorld"
+            class="btn btn-green btn-full"
+            type="button"
+          >
+            🌈 創造我的 Plus-Plus 世界
+          </button>
+
+          <div
+            id="creationStatus"
+            class="status"
+            role="status"
+          >
+            AI 將自動理解作品是角色還是場景。
+          </div>
+
+        </section>
+
+        <!-- ==========================
+             04 語音
+        =========================== -->
+
+        <section class="panel-section">
+
+          <h3>04｜和你的世界說話</h3>
+
+          <p>
+            自由說出想像，例如新增朋友、
+            改變角色造型、賦予技能、
+            改造場景或創造故事。
+          </p>
+
+          <button
+            id="workbenchVoiceButton"
+            class="btn btn-primary btn-full"
+            type="button"
+          >
+            🎤 開始語音創作
+          </button>
+
+          <div class="button-grid" style="margin-top:9px">
+
+            <button
+              id="toggleVoiceOutput"
+              class="btn"
+              type="button"
+            >
+              🔊 語音回應：開
+            </button>
+
+            <button
+              id="stopSpeakingButton"
+              class="btn"
+              type="button"
+            >
+              停止說話
+            </button>
+
+          </div>
+
+          <textarea
+            id="textCommand"
+            rows="3"
+            style="margin-top:10px"
+            placeholder="也可以打字：讓我的角色長出翅膀，飛到天空……"
+          ></textarea>
+
+          <button
+            id="sendTextCommand"
+            class="btn btn-yellow btn-full"
+            type="button"
+          >
+            ✨ 送出創作想法
+          </button>
+
+          <div
+            id="aiReply"
+            class="status"
+            aria-live="polite"
+          ></div>
+
+        </section>
+
+        <!-- ==========================
+             05 角色管理
+        =========================== -->
+
+        <section class="panel-section">
+
+          <h3>05｜我的積木角色</h3>
+
+          <div id="heroList"></div>
+
+          <div class="button-grid" style="margin-top:10px">
+
+            <button
+              id="newCreationButton"
+              class="btn btn-green"
+              type="button"
+            >
+              ＋ 新增創作
+            </button>
+
+            <button
+              id="clearWorldButton"
+              class="btn"
+              type="button"
+            >
+              清空世界
+            </button>
+
+          </div>
+
+        </section>
+
+        <!-- ==========================
+             06 系統檢查
+        =========================== -->
+
+        <section class="panel-section">
+
+          <h3>06｜AI 系統狀態</h3>
+
+          <button
+            id="testAIButton"
+            class="btn btn-primary btn-full"
+            type="button"
+          >
+            🔍 測試 AI 功能
+          </button>
+
+          <div
+            id="aiSystemStatus"
+            class="status"
+            role="status"
+            aria-live="polite"
+          >
+            等待 AI 後端連線。
+          </div>
+
+        </section>
+
+      </div>
 
     </aside>
 
-  </div>
+    <!-- ==============================
+         世界生成進度
+    =============================== -->
 
-  <!-- ======================================
-       全螢幕及側欄按鈕
-  ======================================= -->
+    <div
+      id="creationProgress"
+      class="hidden"
+      role="status"
+      aria-live="polite"
+    >
 
-  <button
-    id="fullscreenButton"
-    type="button"
-  >
-    ⛶ 全螢幕
-  </button>
+      <div class="loader"></div>
 
-  <button
-    id="mobileToggle"
-    type="button"
-    aria-label="開啟或收合操作面板"
-  >
-    ☰
-  </button>
-
-  <!-- ======================================
-       Google Apps Script Bridge
-  ======================================= -->
-
-  <iframe
-    id="bridgeFrame"
-    title="Mindspace Plus-Plus AI Bridge"
-  ></iframe>
-
-  <!-- ======================================
-       照片上傳
-  ======================================= -->
-
-  <input
-    id="photoFile"
-    type="file"
-    accept="image/*"
-    hidden
-  >
-
-  <!-- 保留舊版可能使用的 cameraUpload -->
-  <input
-    id="cameraUpload"
-    type="file"
-    accept="image/*"
-    capture="environment"
-    hidden
-  >
-
-  <!-- ======================================
-       攝影機
-  ======================================= -->
-
-  <div
-    id="cameraModal"
-    class="modal hidden"
-    role="dialog"
-    aria-modal="true"
-    aria-label="拍攝積木作品"
-  >
-
-    <div class="dialog">
-
-      <h2>📸 拍攝 Plus-Plus 積木作品</h2>
-
-      <video
-        id="cameraVideo"
-        autoplay
-        muted
-        playsinline
-      ></video>
-
-      <p id="cameraMessage" class="hint">
-        準備攝影機……
-      </p>
-
-      <div class="actions">
-
-        <button
-          id="captureButton"
-          class="pink"
-          type="button"
-        >
-          📸 拍照
-        </button>
-
-        <button
-          id="switchCamera"
-          class="blue"
-          type="button"
-        >
-          🔄 切換鏡頭
-        </button>
-
-        <button
-          id="retryCamera"
-          type="button"
-        >
-          🔄 重試
-        </button>
-
-        <button
-          id="closeCamera"
-          type="button"
-        >
-          ✖ 關閉
-        </button>
-
-      </div>
-
-    </div>
-
-  </div>
-
-  <!-- ======================================
-       AI 去背與手動編輯器
-  ======================================= -->
-
-  <div
-    id="editorModal"
-    class="modal hidden"
-    role="dialog"
-    aria-modal="true"
-    aria-label="積木作品去背編輯"
-  >
-
-    <div class="dialog">
-
-      <h2>🪄 Plus-Plus 積木去背編輯</h2>
-
-      <canvas id="editCanvas"></canvas>
-
-      <p class="hint">
-        可使用 AI 去背、快速去背，
-        或使用筆刷擦除與還原。
-        請保留原本的積木形狀與顏色。
-      </p>
-
-      <div class="actions">
-
-        <button
-          id="removeBgAI"
-          class="blue"
-          type="button"
-        >
-          🤖 AI 自動去背
-        </button>
-
-        <button
-          id="removeBg"
-          class="yellow"
-          type="button"
-        >
-          ✨ 快速去背
-        </button>
-
-      </div>
-
-      <div class="actions">
-
-        <button
-          id="eraseMode"
-          class="pink"
-          type="button"
-        >
-          🧽 擦除
-        </button>
-
-        <button
-          id="restoreMode"
-          class="mint"
-          type="button"
-        >
-          🖌️ 還原
-        </button>
-
-        <button
-          id="undoEdit"
-          class="blue"
-          type="button"
-        >
-          ↶ 上一步
-        </button>
-
-        <button
-          id="resetEdit"
-          class="yellow"
-          type="button"
-        >
-          ↺ 重設
-        </button>
-
-      </div>
-
-      <p class="hint">
-        筆刷大小
-      </p>
-
-      <input
-        id="brushSize"
-        type="range"
-        min="5"
-        max="90"
-        value="28"
+      <div
+        id="creationProgressText"
+        style="font-size:17px;font-weight:700"
       >
-
-      <div class="actions">
-
-        <button
-          id="saveEditor"
-          class="mint"
-          type="button"
-        >
-          🌈 放入世界
-        </button>
-
-        <button
-          id="closeEditor"
-          type="button"
-        >
-          取消
-        </button>
-
+        正在創造 Plus-Plus 世界……
       </div>
+
+      <p
+        style="
+          color:var(--muted);
+          font-size:13px;
+          line-height:1.7;
+          margin-bottom:0;
+        "
+      >
+        AI 正在理解你的積木，
+        請稍等一下。
+      </p>
 
     </div>
 
-  </div>
+    <!--
+      GAS Bridge iframe：
+      由 sketch.js 動態建立，
+      不在 HTML 寫死部署網址。
+    -->
 
-  <!-- ======================================
-       JavaScript
+    <div
+      id="bridgeContainer"
+      class="hidden"
+      aria-hidden="true"
+    ></div>
 
-       不另外載入 plus-plus.js
-       Plus-Plus 功能直接整合在
-       sketch.js 與 ai-director.js
-  ======================================= -->
+  </main>
 
-  <script src="./sketch.js"></script>
-  <script src="./ai-director.js"></script>
-  <script src="./tool-basket.js"></script>
+  <!--
+    前端核心：
+    後續提供完整的 sketch.js 和 ai-director.js。
+  -->
+
+  <script src="./sketch.js" defer></script>
+  <script src="./ai-director.js" defer></script>
 
 </body>
 </html>
