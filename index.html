@@ -3,80 +3,29 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-
   <meta
     name="viewport"
-    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    content="width=device-width,initial-scale=1,viewport-fit=cover"
   >
 
   <title>Mindspace Plus-Plus｜想像有形</title>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js"></script>
 
-/* 二評工作台捲動修正 */
-
-#sidebar {
-  height: 100vh !important;
-  height: 100dvh !important;
-  max-height: 100dvh !important;
-  bottom: auto !important;
-
-  overflow-x: hidden !important;
-  overflow-y: scroll !important;
-
-  overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
-
-  padding-bottom: 130px !important;
-  touch-action: pan-y;
-}
-
-#sidebar.is-open {
-  pointer-events: auto !important;
-}
-
-/* ===== 工作台開啟時的按鈕配置 ===== */
-
-#sidebar {
-  height: 100dvh !important;
-  max-height: 100dvh !important;
-  overflow-y: auto !important;
-  overscroll-behavior-y: contain;
-  padding: 25px 20px 130px !important;
-}
-
-body.workbench-open #bubbleCamera,
-body.workbench-open #bubbleMic,
-body.workbench-open #bubbleFullscreen {
-  display: none !important;
-}
-
-body.workbench-open #floatingControls {
-  right: 14px !important;
-  top: 14px !important;
-  bottom: auto !important;
-  z-index: 110 !important;
-}
-
-body.workbench-open #bubbleWorkbench {
-  width: 48px;
-  height: 48px;
-  font-size: 22px;
-  background: #fff0ba;
-}
-
-body.workbench-open #sidebar {
-  padding-top: 85px !important;
-}
-
   <style>
+    /* =========================================
+       01｜全站基本設定
+    ========================================= */
+
     :root {
       --pink: #ff8ab5;
       --blue: #88c8ff;
       --mint: #8ee6c7;
       --yellow: #ffe49a;
       --ink: #27364a;
-      --panel: rgba(255,255,255,.96);
+      --muted: #718092;
+      --panel: #ffffff;
+      --border: #e5eaf1;
     }
 
     * {
@@ -105,13 +54,13 @@ body.workbench-open #sidebar {
     }
 
     button {
-      cursor: pointer;
       border: 0;
       border-radius: 14px;
       padding: 11px 14px;
       font-weight: 700;
       color: var(--ink);
       background: #eaf0f7;
+      cursor: pointer;
       transition:
         transform .18s,
         filter .18s;
@@ -119,7 +68,10 @@ body.workbench-open #sidebar {
 
     button:hover {
       filter: brightness(.97);
-      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: scale(.97);
     }
 
     button:disabled {
@@ -151,15 +103,21 @@ body.workbench-open #sidebar {
       display: none !important;
     }
 
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    /* =========================================
+       02｜互動世界
+    ========================================= */
+
     .app {
       position: fixed;
       inset: 0;
       overflow: hidden;
     }
-
-    /* ==========================
-       沉浸式互動世界
-    ========================== */
 
     .world {
       position: absolute;
@@ -173,10 +131,21 @@ body.workbench-open #sidebar {
         );
     }
 
+    #generatedBackground,
     #scene,
-    #actors {
+    #environmentLayer,
+    #actors,
+    #effectLayer {
       position: absolute;
       inset: 0;
+    }
+
+    #generatedBackground {
+      z-index: 0;
+      pointer-events: none;
+      background-position: center;
+      background-size: cover;
+      background-repeat: no-repeat;
     }
 
     #scene {
@@ -188,6 +157,12 @@ body.workbench-open #sidebar {
       display: block;
     }
 
+    #environmentLayer {
+      z-index: 2;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
     #actors {
       z-index: 3;
       pointer-events: none;
@@ -197,32 +172,10 @@ body.workbench-open #sidebar {
       pointer-events: auto;
     }
 
-    /* 二評新增：背景及環境圖層 */
-
-    #generatedBackground {
-      position: absolute;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      background-position: center;
-      background-size: cover;
-      background-repeat: no-repeat;
-    }
-
-    #environmentLayer {
-      position: absolute;
-      inset: 0;
-      z-index: 2;
-      pointer-events: none;
-      overflow: hidden;
-    }
-
     #effectLayer {
-      position: absolute;
-      inset: 0;
       z-index: 4;
-      pointer-events: none;
       overflow: hidden;
+      pointer-events: none;
     }
 
     #worldTitle {
@@ -232,7 +185,7 @@ body.workbench-open #sidebar {
       z-index: 10;
       padding: 10px 17px;
       border-radius: 24px;
-      background: rgba(255,255,255,.77);
+      background: rgba(255,255,255,.82);
       backdrop-filter: blur(12px);
       font-size: 15px;
       font-weight: 800;
@@ -245,19 +198,21 @@ body.workbench-open #sidebar {
       bottom: 100px;
       transform: translateX(-50%);
       z-index: 12;
+      width: max-content;
       max-width: min(620px, 82vw);
       padding: 14px 22px;
       border-radius: 24px;
       background: rgba(255,255,255,.94);
-      box-shadow: 0 8px 35px rgba(0,0,0,.13);
+      box-shadow: 0 8px 35px #0002;
       font-size: 15px;
       text-align: center;
+      line-height: 1.6;
       pointer-events: none;
     }
 
-    /* ==========================
-       四顆懸浮泡泡按鈕
-    ========================== */
+    /* =========================================
+       03｜四顆懸浮操作按鈕
+    ========================================= */
 
     #floatingControls {
       position: fixed;
@@ -279,10 +234,9 @@ body.workbench-open #sidebar {
       place-items: center;
       font-size: 27px;
       background: rgba(255,255,255,.94);
-      box-shadow:
-        0 6px 22px rgba(0,0,0,.20);
+      box-shadow: 0 6px 22px #0003;
       backdrop-filter: blur(10px);
-      border: 2px solid rgba(255,255,255,.8);
+      border: 2px solid #fffc;
     }
 
     .bubbleButton.camera {
@@ -314,55 +268,111 @@ body.workbench-open #sidebar {
       }
     }
 
-    /* ==========================
-       右側工作台
-    ========================== */
+    /* =========================================
+       04｜右側工作台
+
+       修正：
+       - 獨立捲動
+       - 不被懸浮按鈕遮擋
+       - 固定關閉按鈕
+    ========================================= */
 
     #sidebar {
       position: fixed;
       top: 0;
       right: 0;
       bottom: 0;
-      width: min(380px, 88vw);
-      z-index: 90;
+      width: min(420px, 94vw);
+      height: 100dvh;
+      max-height: 100dvh;
+      z-index: 120;
+      overflow-x: hidden;
       overflow-y: auto;
-      padding: 25px 20px 110px;
+      overscroll-behavior-y: contain;
+      -webkit-overflow-scrolling: touch;
+      padding:
+        24px
+        20px
+        calc(48px + env(safe-area-inset-bottom));
       background: var(--panel);
-      box-shadow: -10px 0 40px rgba(0,0,0,.18);
+      box-shadow: -10px 0 40px #0003;
       transform: translateX(105%);
       transition: transform .3s ease;
+      scrollbar-gutter: stable;
     }
 
     #sidebar.is-open {
       transform: translateX(0);
     }
 
-    #sidebar h1 {
+    /*
+      關鍵修正：
+      工作台開啟時，四顆泡泡全部隱藏。
+      不需要再靠 JavaScript 添加 body class。
+    */
+
+    body:has(#sidebar.is-open) #floatingControls {
+      display: none !important;
+    }
+
+    .sidebarHeader {
+      position: sticky;
+      top: -24px;
+      z-index: 3;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 17px 0 15px;
+      margin: -17px 0 8px;
+      background: rgba(255,255,255,.98);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebarHeader h1 {
       margin: 0;
-      font-size: 26px;
+      font-size: 25px;
+      line-height: 1.3;
     }
 
     .subtitle {
-      color: #718092;
-      font-size: 13px;
-      margin-top: 5px;
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    #closeWorkbench {
+      flex: 0 0 42px;
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border-radius: 50%;
+      background: #f1f4f8;
+      font-size: 20px;
     }
 
     .section {
       padding: 20px 0;
-      border-bottom: 1px solid #e4e9ef;
+      border-bottom: 1px solid var(--border);
     }
 
     .section h2 {
-      font-size: 16px;
       margin: 0 0 13px;
+      font-size: 16px;
     }
 
     .grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns:
+        repeat(2, minmax(0, 1fr));
       gap: 9px;
       margin: 10px 0;
+    }
+
+    .grid button {
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .actions {
@@ -372,30 +382,29 @@ body.workbench-open #sidebar {
       margin-top: 14px;
     }
 
-    .hint {
-      font-size: 13px;
-      line-height: 1.7;
-      color: #718092;
-    }
-
     textarea,
     select,
     input[type="text"] {
+      display: block;
       width: 100%;
+      min-width: 0;
       border: 1px solid #d9e1eb;
       border-radius: 13px;
-      background: #fff;
       padding: 12px;
-      outline: none;
+      background: #fff;
+      color: var(--ink);
+      outline-color: #83b8ec;
     }
 
     textarea {
       min-height: 88px;
       resize: vertical;
+      margin-bottom: 10px;
     }
 
     #chatLog {
       max-height: 180px;
+      min-height: 70px;
       overflow-y: auto;
       margin: 12px 0;
       padding: 12px;
@@ -409,24 +418,88 @@ body.workbench-open #sidebar {
       padding: 8px 0;
     }
 
+    #appearance,
     #status {
-      padding: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    #status {
+      padding: 13px;
       border-radius: 12px;
       background: #eef5ff;
-      font-size: 12px;
-      overflow-wrap: anywhere;
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+
+    .teacher-background {
+      margin: 12px 0;
+      padding: 14px;
+      background: #f7f9fc;
+      border-radius: 15px;
+    }
+
+    .teacher-background label {
+      display: block;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .teacher-background input {
+      display: block;
+      max-width: 100%;
+      margin-bottom: 12px;
     }
 
     #toolBasketOverlay {
       position: fixed;
       inset: 0;
       z-index: 80;
-      background: rgba(0,0,0,.25);
+      background: #0004;
     }
 
-    /* ==========================
-       歡迎畫面
-    ========================== */
+    /* =========================================
+       05｜AI 語音控制介面
+    ========================================= */
+
+    .voicePanel {
+      margin-top: 14px;
+      padding: 15px;
+      border: 1px solid #e3eaf2;
+      border-radius: 17px;
+      background: #f5f9ff;
+    }
+
+    .voicePanelHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    #aiVoiceVolume {
+      display: block;
+      width: 100%;
+      margin: 10px 0;
+      accent-color: #69a9e5;
+      cursor: pointer;
+    }
+
+    #aiVoiceVolume:disabled {
+      opacity: .4;
+    }
+
+    #aiVoiceVolumeValue {
+      font-variant-numeric: tabular-nums;
+      color: #367db6;
+    }
+
+    /* =========================================
+       06｜歡迎畫面
+    ========================================= */
 
     #startScreen {
       position: fixed;
@@ -447,19 +520,19 @@ body.workbench-open #sidebar {
       width: min(470px, 90vw);
       padding: 38px 30px;
       border-radius: 32px;
-      background: rgba(255,255,255,.94);
+      background: #fffffff0;
       text-align: center;
-      box-shadow: 0 20px 60px rgba(0,0,0,.15);
+      box-shadow: 0 20px 60px #0002;
     }
 
     .startCard h1 {
-      font-size: 42px;
       margin: 10px 0 0;
+      font-size: 42px;
     }
 
     .startCard h2 {
-      font-size: 22px;
       margin: 5px 0;
+      font-size: 22px;
     }
 
     .startCard p {
@@ -467,15 +540,15 @@ body.workbench-open #sidebar {
     }
 
     #startButton {
-      background: var(--pink);
-      font-size: 18px;
       padding: 15px 30px;
       margin-top: 12px;
+      background: var(--pink);
+      font-size: 18px;
     }
 
-    /* ==========================
-       攝影機 / 編輯器 / 分類視窗
-    ========================== */
+    /* =========================================
+       07｜攝影機、編輯器、分類視窗
+    ========================================= */
 
     .modal {
       position: fixed;
@@ -496,7 +569,7 @@ body.workbench-open #sidebar {
       padding: 24px;
       border-radius: 26px;
       background: white;
-      box-shadow: 0 18px 60px rgba(0,0,0,.25);
+      box-shadow: 0 18px 60px #0004;
     }
 
     .dialog h2 {
@@ -515,6 +588,7 @@ body.workbench-open #sidebar {
     }
 
     #cameraPreview {
+      display: block;
       width: 100%;
       max-height: 52dvh;
       object-fit: contain;
@@ -527,13 +601,13 @@ body.workbench-open #sidebar {
     }
 
     #classificationPreview {
+      display: block;
       width: 180px;
       height: 180px;
       object-fit: contain;
+      margin: 10px auto;
       background: #eef3f7;
       border-radius: 16px;
-      margin: 10px auto;
-      display: block;
     }
 
     .classificationChoices {
@@ -546,8 +620,8 @@ body.workbench-open #sidebar {
     .classificationChoice {
       padding: 20px 10px;
       border: 2px solid #e4e9ef;
-      background: #f5f8fc;
       border-radius: 18px;
+      background: #f5f8fc;
     }
 
     .classificationChoice.active {
@@ -556,12 +630,17 @@ body.workbench-open #sidebar {
     }
 
     #bridgeFrame {
-      position: absolute;
+      position: fixed;
       width: 1px;
       height: 1px;
       opacity: 0;
       pointer-events: none;
+      border: 0;
     }
+
+    /* =========================================
+       08｜響應式設計
+    ========================================= */
 
     @media (max-width: 650px) {
       #worldTitle {
@@ -587,8 +666,32 @@ body.workbench-open #sidebar {
         font-size: 23px;
       }
 
+      #sidebar {
+        width: min(420px, 96vw);
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
       .dialog {
         padding: 18px;
+      }
+
+      .startCard {
+        padding: 28px 20px;
+      }
+
+      .startCard h1 {
+        font-size: 35px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
       }
     }
   </style>
@@ -596,13 +699,16 @@ body.workbench-open #sidebar {
 
 <body>
 
-  <!-- ==========================
-       歡迎畫面
-  ========================== -->
+  <!-- =========================================
+       09｜歡迎畫面
+  ========================================= -->
 
   <div id="startScreen">
     <div class="startCard">
-      <div style="font-size:52px">🧩 🌈 ✨</div>
+
+      <div style="font-size:52px">
+        🧩 🌈 ✨
+      </div>
 
       <h1>Mindspace</h1>
       <h2>Plus-Plus｜想像有形</h2>
@@ -613,19 +719,20 @@ body.workbench-open #sidebar {
         可以自由探索的數位世界！
       </p>
 
-      <button id="startButton">
+      <button id="startButton" type="button">
         ✨ 開始創造
       </button>
 
       <p class="hint">
         支援攝影機、麥克風及全螢幕互動。
       </p>
+
     </div>
   </div>
 
-  <!-- ==========================
-       主互動世界
-  ========================== -->
+  <!-- =========================================
+       10｜主要互動世界
+  ========================================= -->
 
   <div id="app" class="app">
 
@@ -651,17 +758,38 @@ body.workbench-open #sidebar {
 
     </main>
 
-    <!-- ==========================
-         右側工作台
-    ========================== -->
+    <!-- =====================================
+         11｜右側工作台
+    ===================================== -->
 
-    <aside id="sidebar" class="sidebar">
+    <aside
+      id="sidebar"
+      class="sidebar"
+      aria-label="Mindspace 工作台"
+    >
 
-      <h1>🧩 Mindspace</h1>
+      <header class="sidebarHeader">
 
-      <p class="subtitle">
-        實體創造 × AI 轉譯 × 自由探索
-      </p>
+        <div>
+          <h1>🧩 Mindspace</h1>
+
+          <p class="subtitle">
+            實體創造 × AI 轉譯 × 自由探索
+          </p>
+        </div>
+
+        <button
+          id="closeWorkbench"
+          type="button"
+          aria-label="關閉工作台"
+          title="關閉工作台"
+        >
+          ✕
+        </button>
+
+      </header>
+
+      <!-- 我的作品 -->
 
       <section class="section">
 
@@ -691,7 +819,10 @@ body.workbench-open #sidebar {
 
         </div>
 
-        <button id="inspectHero" class="full blue">
+        <button
+          id="inspectHero"
+          class="full blue"
+        >
           🧠 AI 重新觀察作品
         </button>
 
@@ -699,13 +830,16 @@ body.workbench-open #sidebar {
 
       </section>
 
+      <!-- AI 作品理解 -->
+
       <section class="section">
 
         <h2>🧠 AI 作品理解</h2>
 
         <p class="hint">
           AI 會根據作品造型與你的描述，
-          理解這是角色還是環境。
+          提供角色或環境分類建議。
+          最後由你自己決定。
         </p>
 
         <textarea
@@ -733,7 +867,10 @@ body.workbench-open #sidebar {
 
         </div>
 
-        <p id="creationModeHint" class="hint">
+        <p
+          id="creationModeHint"
+          class="hint"
+        >
           AI 辨識後可以自行更正。
         </p>
 
@@ -745,9 +882,14 @@ body.workbench-open #sidebar {
           ✨ AI 延伸想像世界
         </button>
 
-        <p id="creationProgress" class="hint"></p>
+        <p
+          id="creationProgress"
+          class="hint"
+        ></p>
 
       </section>
+
+      <!-- 語音與文字互動 -->
 
       <section class="section">
 
@@ -768,30 +910,78 @@ body.workbench-open #sidebar {
 
         <div class="grid">
 
-          <button id="micButton" class="pink">
+          <button
+            id="micButton"
+            class="pink"
+          >
             🎙️ 開始說話
           </button>
 
-          <button id="sendButton" class="blue">
+          <button
+            id="sendButton"
+            class="blue"
+          >
             💬 送出想法
           </button>
 
-          <button id="voiceButton" class="mint">
+          <button
+            id="voiceButton"
+            class="mint"
+            aria-pressed="true"
+          >
             🔊 語音：開
           </button>
 
-          <button id="stopVoice" class="yellow">
+          <button
+            id="stopVoice"
+            class="yellow"
+          >
             ⏹️ 停止語音
           </button>
 
         </div>
 
+        <!-- AI 語音音量 -->
+
+        <div class="voicePanel">
+
+          <div class="voicePanelHeader">
+
+            <label for="aiVoiceVolume">
+              🔉 AI 語音音量
+            </label>
+
+            <span id="aiVoiceVolumeValue">
+              60%
+            </span>
+
+          </div>
+
+          <input
+            id="aiVoiceVolume"
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value="60"
+            aria-label="AI 語音音量"
+          >
+
+          <p class="hint">
+            0% 為靜音，100% 為最大音量。
+            語音開關可完全停止 AI 發聲。
+          </p>
+
+        </div>
+
         <p class="hint">
-          你可以自由描述角色、配件、能力、
-          配角、環境變化或故事事件。
+          你可以自由描述角色、配件、
+          能力、配角、環境變化或故事事件。
         </p>
 
       </section>
+
+      <!-- 角色變身 -->
 
       <section class="section">
 
@@ -804,19 +994,31 @@ body.workbench-open #sidebar {
 
         <div class="grid">
 
-          <button id="transformButton" class="pink">
+          <button
+            id="transformButton"
+            class="pink"
+          >
             ✨ AI 積木變身
           </button>
 
-          <button id="restoreButton" class="blue">
+          <button
+            id="restoreButton"
+            class="blue"
+          >
             ↩️ 原始造型
           </button>
 
-          <button id="showTransform" class="mint">
+          <button
+            id="showTransform"
+            class="mint"
+          >
             👀 AI 造型
           </button>
 
-          <button id="skillButton" class="yellow">
+          <button
+            id="skillButton"
+            class="yellow"
+          >
             ⚡ 表演技能
           </button>
 
@@ -824,17 +1026,20 @@ body.workbench-open #sidebar {
 
       </section>
 
+      <!-- 世界 -->
+
       <section class="section">
 
         <h2>🌍 想像世界</h2>
 
         <p class="hint">
-          AI 會依據角色與環境作品，
-          自主延伸 Plus-Plus 積木風格世界。
+          AI 會根據孩子的作品與描述，
+          延伸 Plus-Plus 積木風格世界。
           新作品不會清空既有世界。
         </p>
 
         <select id="worldSelect">
+
           <option value="ocean">
             🌊 海底世界
           </option>
@@ -846,11 +1051,12 @@ body.workbench-open #sidebar {
           <option value="space">
             🚀 太空世界
           </option>
+
         </select>
 
         <p class="hint">
-          上方選單保留一評的手動世界功能，
-          AI 生成的背景則可依作品自由延伸。
+          這是手動選擇預設場景的功能，
+          AI 仍可以根據你的想像產生新世界。
         </p>
 
         <div class="teacher-background">
@@ -874,23 +1080,39 @@ body.workbench-open #sidebar {
 
         </div>
 
-        <button id="resetButton" class="full yellow">
+        <button
+          id="resetButton"
+          class="full yellow"
+        >
           🌱 開始新創作
         </button>
 
       </section>
 
+      <!-- AI 系統狀態 -->
+
       <section class="section">
 
         <h2>🔌 AI 系統狀態</h2>
 
-        <button id="testBridge" class="full mint">
+        <button
+          id="testBridge"
+          class="full mint"
+        >
           🔍 測試 AI 連線
         </button>
 
-        <div id="status">
+        <div
+          id="status"
+          role="status"
+          aria-live="polite"
+        >
           等待系統啟動……
         </div>
+
+        <p class="hint">
+          AI 連線失敗時，這裡會顯示錯誤訊息。
+        </p>
 
       </section>
 
@@ -898,9 +1120,9 @@ body.workbench-open #sidebar {
 
   </div>
 
-  <!-- ==========================
-       四顆泡泡按鈕
-  ========================== -->
+  <!-- =========================================
+       12｜四顆懸浮泡泡
+  ========================================= -->
 
   <nav
     id="floatingControls"
@@ -931,7 +1153,7 @@ body.workbench-open #sidebar {
       id="bubbleWorkbench"
       class="bubbleButton basket"
       type="button"
-      title="展開或收起工作台"
+      title="展開工作台"
       aria-label="工作台"
       aria-expanded="false"
     >
@@ -950,27 +1172,27 @@ body.workbench-open #sidebar {
 
   </nav>
 
-  <!-- 保留一評的按鈕 ID，供既有程式使用 -->
+  <!-- 與原本 sketch.js 相容的按鈕 -->
 
   <button
     id="fullscreenButton"
-    type="button"
     class="hidden"
+    type="button"
   >
     ⛶ 全螢幕
   </button>
 
   <button
     id="mobileToggle"
-    type="button"
     class="hidden"
+    type="button"
   >
     ☰
   </button>
 
-  <!-- ==========================
-       GAS Bridge
-  ========================== -->
+  <!-- =========================================
+       13｜GAS Bridge
+  ========================================= -->
 
   <iframe
     id="bridgeFrame"
@@ -984,11 +1206,14 @@ body.workbench-open #sidebar {
     hidden
   >
 
-  <!-- ==========================
-       中央攝影視窗
-  ========================== -->
+  <!-- =========================================
+       14｜攝影機視窗
+  ========================================= -->
 
-  <div id="cameraModal" class="modal hidden">
+  <div
+    id="cameraModal"
+    class="modal hidden"
+  >
 
     <div class="dialog">
 
@@ -1007,17 +1232,26 @@ body.workbench-open #sidebar {
         alt="拍攝預覽"
       >
 
-      <p id="cameraMessage" class="hint">
+      <p
+        id="cameraMessage"
+        class="hint"
+      >
         將積木作品放在鏡頭中央。
       </p>
 
       <div class="actions">
 
-        <button id="captureButton" class="pink">
+        <button
+          id="captureButton"
+          class="pink"
+        >
           📸 拍照
         </button>
 
-        <button id="switchCamera" class="blue">
+        <button
+          id="switchCamera"
+          class="blue"
+        >
           🔄 切換鏡頭
         </button>
 
@@ -1032,14 +1266,16 @@ body.workbench-open #sidebar {
       </div>
 
     </div>
-
   </div>
 
-  <!-- ==========================
-       AI 去背編輯器
-  ========================== -->
+  <!-- =========================================
+       15｜AI 去背編輯器
+  ========================================= -->
 
-  <div id="editorModal" class="modal hidden">
+  <div
+    id="editorModal"
+    class="modal hidden"
+  >
 
     <div class="dialog">
 
@@ -1048,18 +1284,24 @@ body.workbench-open #sidebar {
       <canvas id="editCanvas"></canvas>
 
       <p class="hint">
-        按下 AI 自動去背後，
-        保留原始積木的外型與顏色。
+        AI 去背會嘗試保留原始積木的造型、
+        顏色與結構。
         也可以使用筆刷手動修正。
       </p>
 
       <div class="actions">
 
-        <button id="removeBgAI" class="blue">
+        <button
+          id="removeBgAI"
+          class="blue"
+        >
           🤖 AI 自動去背
         </button>
 
-        <button id="removeBg" class="pink">
+        <button
+          id="removeBg"
+          class="pink"
+        >
           ✨ 快速去背
         </button>
 
@@ -1095,7 +1337,10 @@ body.workbench-open #sidebar {
 
       <div class="actions">
 
-        <button id="saveEditor" class="mint">
+        <button
+          id="saveEditor"
+          class="mint"
+        >
           🌈 放入世界
         </button>
 
@@ -1106,12 +1351,11 @@ body.workbench-open #sidebar {
       </div>
 
     </div>
-
   </div>
 
-  <!-- ==========================
-       AI 角色 / 環境分類確認
-  ========================== -->
+  <!-- =========================================
+       16｜AI 角色 / 環境分類
+  ========================================= -->
 
   <div
     id="classificationModal"
@@ -1127,7 +1371,10 @@ body.workbench-open #sidebar {
         alt="去背後的積木作品"
       >
 
-      <p id="classificationMessage" class="hint">
+      <p
+        id="classificationMessage"
+        class="hint"
+      >
         AI 正在理解你的創作……
       </p>
 
@@ -1183,18 +1430,133 @@ body.workbench-open #sidebar {
       </div>
 
     </div>
-
   </div>
 
-  <!-- ==========================
-       程式載入順序
-  ========================== -->
+  <!-- =========================================
+       17｜工作台開關
 
-  <script src="./sketch.js"></script>
+       獨立關閉按鈕：
+       不依賴 sketch.js 是否成功連線 AI。
+  ========================================= -->
 
-  <script src="./ai-director.js"></script>
+  <script>
+    (function () {
+      "use strict";
 
-  <script src="./tool-basket.js"></script>
+      const sidebar =
+        document.getElementById("sidebar");
+
+      const closeButton =
+        document.getElementById(
+          "closeWorkbench"
+        );
+
+      const bubbleButton =
+        document.getElementById(
+          "bubbleWorkbench"
+        );
+
+      if (!sidebar || !closeButton) {
+        return;
+      }
+
+      closeButton.addEventListener(
+        "click",
+        function () {
+
+          sidebar.classList.remove(
+            "is-open"
+          );
+
+          if (bubbleButton) {
+            bubbleButton.setAttribute(
+              "aria-expanded",
+              "false"
+            );
+          }
+
+        }
+      );
+
+      /*
+        同步工作台狀態。
+
+        不重複綁定 bubbleWorkbench，
+        因為它由 sketch.js 管理。
+      */
+
+      const observer =
+        new MutationObserver(
+          function () {
+
+            const opened =
+              sidebar.classList.contains(
+                "is-open"
+              );
+
+            if (bubbleButton) {
+              bubbleButton.setAttribute(
+                "aria-expanded",
+                String(opened)
+              );
+            }
+
+          }
+        );
+
+      observer.observe(
+        sidebar,
+        {
+          attributes: true,
+          attributeFilter: ["class"]
+        }
+      );
+
+      /*
+        讓音量百分比立即更新。
+        實際播放音量由下一份
+        sketch.js 統一處理。
+      */
+
+      const volumeSlider =
+        document.getElementById(
+          "aiVoiceVolume"
+        );
+
+      const volumeValue =
+        document.getElementById(
+          "aiVoiceVolumeValue"
+        );
+
+      if (volumeSlider && volumeValue) {
+
+        volumeSlider.addEventListener(
+          "input",
+          function () {
+
+            volumeValue.textContent =
+              volumeSlider.value + "%";
+
+          }
+        );
+
+      }
+
+    })();
+  </script>
+
+  <!-- =========================================
+       18｜二評程式載入
+
+       保留原本三份 JS 檔案。
+       版本參數用來避免舊版快取。
+  ========================================= -->
+
+  <script src="./sketch.js?v=plusplus-20261031-3"></script>
+
+  <script src="./ai-director.js?v=plusplus-20261031-3"></script>
+
+  <script src="./tool-basket.js?v=plusplus-20261031-3"></script>
 
 </body>
 </html>
