@@ -35,6 +35,40 @@
   pointer-events: auto !important;
 }
 
+/* ===== 工作台開啟時的按鈕配置 ===== */
+
+#sidebar {
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+  padding: 25px 20px 130px !important;
+}
+
+body.workbench-open #bubbleCamera,
+body.workbench-open #bubbleMic,
+body.workbench-open #bubbleFullscreen {
+  display: none !important;
+}
+
+body.workbench-open #floatingControls {
+  right: 14px !important;
+  top: 14px !important;
+  bottom: auto !important;
+  z-index: 110 !important;
+}
+
+body.workbench-open #bubbleWorkbench {
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+  background: #fff0ba;
+}
+
+body.workbench-open #sidebar {
+  padding-top: 85px !important;
+}
+
   <style>
     :root {
       --pink: #ff8ab5;
