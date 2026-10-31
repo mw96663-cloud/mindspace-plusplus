@@ -27,7 +27,7 @@ API Key 不要放在這個檔案。
 */
 
 const MINDSPACE_CONFIG = {
-  GAS_URL: "",
+  GAS_URL: "https://script.google.com/macros/s/AKfycbxVswrdmiv0CjmI2Na13dEFDGKIjjB-Sb3pG57Nj6j_hf3blMEWenCUoFn2rsLNsQXx/exec",
 
   APP_ID: "mindspace-plusplus-v1",
 
