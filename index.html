@@ -6,175 +6,56 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mindspace Plus-Plus｜想像有形</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.11/p5.min.js"></script>
-
 <style>
 *{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%}
-body{
-  font-family:Arial,"Noto Sans TC",sans-serif;
-  color:#26374d;background:#164c78;overflow:hidden
-}
+html,body{width:100%;height:100%;margin:0}
+body{font-family:Arial,"Noto Sans TC",sans-serif;color:#25374e;background:#164c78;overflow:hidden}
 button,input,textarea{font:inherit}
 button{border:0;cursor:pointer}
 button:disabled{opacity:.55;cursor:wait}
 .hidden{display:none!important}
 #scene{position:fixed;inset:0}
 #scene canvas{display:block}
-#speechBubble{
-  position:fixed;top:18px;left:50%;
-  transform:translateX(-50%);z-index:10;
-  padding:13px 22px;max-width:88vw;
-  background:#fffffff0;border-radius:24px;
-  box-shadow:0 5px 22px #0002;
-  font-size:14px;text-align:center;
-  pointer-events:none
-}
-#floatingControls{
-  position:fixed;right:20px;bottom:20px;
-  z-index:20;display:flex;
-  flex-direction:column;gap:12px
-}
-.floatButton{
-  width:60px;height:60px;border-radius:50%;
-  background:white;font-size:26px;
-  box-shadow:0 5px 20px #0003
-}
+#speechBubble{position:fixed;z-index:10;top:18px;left:50%;transform:translateX(-50%);padding:13px 20px;max-width:85vw;background:#fffffff0;border-radius:24px;text-align:center;box-shadow:0 5px 20px #0002;pointer-events:none;font-size:14px}
+#floatingControls{position:fixed;z-index:20;right:20px;bottom:20px;display:flex;flex-direction:column;gap:12px}
+.floatButton{width:60px;height:60px;border-radius:50%;background:white;font-size:26px;box-shadow:0 5px 20px #0003}
 .primary{background:#ffcf5d!important;color:#26364b!important}
-#sidebar{
-  position:fixed;right:0;top:0;bottom:0;
-  z-index:40;width:min(420px,100vw);
-  background:white;box-shadow:-8px 0 30px #0003;
-  display:flex;flex-direction:column;
-  transform:translateX(105%);
-  transition:transform .25s
-}
+#sidebar{position:fixed;z-index:40;right:0;top:0;bottom:0;width:min(420px,100vw);background:white;box-shadow:-8px 0 30px #0003;display:flex;flex-direction:column;transform:translateX(105%);transition:transform .25s}
 #sidebar.open{transform:translateX(0)}
-.sidebarHeader{
-  padding:18px;display:flex;
-  align-items:center;justify-content:space-between;
-  border-bottom:1px solid #e7edf4
-}
+.sidebarHeader{padding:18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e7edf4}
 .sidebarHeader h1{font-size:19px;margin:0}
 .sidebarBody{padding:20px;overflow-y:auto;flex:1}
 section{margin-bottom:26px}
 section h2{font-size:16px;margin:0 0 12px}
-.action{
-  width:100%;padding:13px;margin:5px 0;
-  border-radius:13px;background:#e5f1fc;
-  color:#26364b;font-weight:600
-}
-.field{
-  width:100%;padding:12px;
-  border:1px solid #d7e0e9;
-  border-radius:12px;margin:6px 0
-}
-.muted{
-  font-size:13px;color:#65788d;
-  line-height:1.7
-}
-#status,#aiTestResult{
-  padding:12px;border-radius:12px;
-  background:#f1f5f9;font-size:13px;
-  line-height:1.7;overflow-wrap:anywhere
-}
-#aiTestResult{
-  white-space:pre-wrap;margin-top:8px;
-  max-height:200px;overflow-y:auto
-}
+.action{width:100%;padding:13px;margin:5px 0;border-radius:13px;background:#e5f1fc;color:#26364b;font-weight:600}
+.field{width:100%;padding:12px;border:1px solid #d7e0e9;border-radius:12px;margin:6px 0}
+.muted{font-size:13px;color:#65788d;line-height:1.7;overflow-wrap:anywhere}
+#status,#aiTestResult{padding:12px;border-radius:12px;background:#f1f5f9;font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+#aiTestResult{white-space:pre-wrap;margin-top:8px;max-height:190px;overflow-y:auto}
 #status.success{background:#e4f7eb;color:#16643b}
 #status.error{background:#fff0ec;color:#a2382c}
-.modal{
-  position:fixed;inset:0;z-index:80;
-  background:#09182cdd;
-  display:grid;place-items:center;padding:12px
-}
-.modalCard{
-  width:min(700px,100%);max-height:96vh;
-  overflow-y:auto;background:white;
-  border-radius:24px;padding:20px
-}
+.modal{position:fixed;inset:0;z-index:80;background:#09182cdd;display:grid;place-items:center;padding:12px}
+.modalCard{width:min(700px,100%);max-height:96vh;overflow-y:auto;background:white;border-radius:24px;padding:20px}
 .modalCard h2{margin:0 0 12px;font-size:19px}
-#cameraVideo{
-  display:block;width:100%;max-height:55vh;
-  object-fit:contain;background:#e7eef5;
-  border-radius:15px
-}
+#cameraVideo{display:block;width:100%;max-height:55vh;object-fit:contain;background:#e7eef5;border-radius:15px}
 .row{display:flex;gap:9px}
 .row>*{flex:1;min-width:0}
-#bridgeFrame{
-  position:fixed;width:1px;height:1px;
-  opacity:0;pointer-events:none;border:0
-}
-
-/* 透明背景編輯器 */
-#editArea{
-  position:relative;width:100%;
-  height:min(48vh,420px);
-  display:flex;align-items:center;justify-content:center;
-  overflow:hidden;border-radius:15px;
-  background-color:#fff;
-  background-image:
-    linear-gradient(45deg,#ddd 25%,transparent 25%),
-    linear-gradient(-45deg,#ddd 25%,transparent 25%),
-    linear-gradient(45deg,transparent 75%,#ddd 75%),
-    linear-gradient(-45deg,transparent 75%,#ddd 75%);
-  background-size:22px 22px;
-  background-position:0 0,0 11px,11px -11px,-11px 0
-}
-#editCanvas{
-  display:block;max-width:100%;max-height:100%;
-  width:auto;height:auto;
-  object-fit:contain;
-  cursor:crosshair;
-  touch-action:none
-}
-.toolRow{
-  display:flex;flex-wrap:wrap;gap:7px;
-  margin:12px 0
-}
-.toolRow button{
-  flex:1;min-width:85px;
-  padding:11px 8px;
-  border-radius:11px;
-  background:#e8f0f7;
-  color:#26364b
-}
-.toolRow button.active{
-  background:#315eaa;color:white
-}
-.sliderRow{
-  display:flex;align-items:center;
-  gap:12px;margin:10px 0
-}
+#bridgeFrame{position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;border:0}
+#editArea{width:100%;height:min(48vh,420px);display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:15px;background-color:white;background-image:linear-gradient(45deg,#ddd 25%,transparent 25%),linear-gradient(-45deg,#ddd 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ddd 75%),linear-gradient(-45deg,transparent 75%,#ddd 75%);background-size:22px 22px;background-position:0 0,0 11px,11px -11px,-11px 0}
+#editCanvas{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;cursor:crosshair;touch-action:none}
+.toolRow{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+.toolRow button{flex:1;min-width:85px;padding:11px 8px;border-radius:11px;background:#e8f0f7;color:#26364b}
+.toolRow button.active{background:#315eaa;color:white}
+.sliderRow{display:flex;align-items:center;gap:12px;margin:10px 0}
 .sliderRow input{flex:1}
-#editorMessage{
-  min-height:32px;
-  overflow-wrap:anywhere
-}
-#classificationPreview{
-  width:100%;height:180px;
-  object-fit:contain;
-  background:#e8edf3;border-radius:14px
-}
-.typeButton{
-  flex:1;padding:16px 8px;
-  border:2px solid #d8e1eb;
-  background:#f5f8fc;border-radius:15px;
-  font-weight:bold
-}
-.typeButton.selected{
-  border-color:#315eaa;background:#dceaff
-}
+#classificationPreview{display:block;width:100%;height:175px;object-fit:contain;background:#e8edf3;border-radius:14px}
+.typeButton{flex:1;padding:16px 8px;border:2px solid #d8e1eb;background:#f5f8fc;border-radius:15px;font-weight:bold}
+.typeButton.selected{border-color:#315eaa;background:#dceaff}
+#aiSuggestion{padding:12px;background:#eef5ff;border-radius:12px;font-size:14px;line-height:1.7;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 #heroList{font-size:13px;color:#546a82;line-height:1.8}
-@media(max-width:600px){
-  .floatButton{width:54px;height:54px}
-  #floatingControls{right:12px;bottom:14px}
-  #speechBubble{font-size:12px}
-  .modalCard{padding:14px}
-}
+@media(max-width:600px){.floatButton{width:54px;height:54px}#floatingControls{right:12px;bottom:14px}#speechBubble{font-size:12px}.modalCard{padding:14px}}
 </style>
 </head>
-
 <body>
 
 <main id="scene"></main>
@@ -192,80 +73,42 @@ section h2{font-size:16px;margin:0 0 12px}
 <aside id="sidebar">
   <header class="sidebarHeader">
     <h1>🧺 Mindspace 工作台</h1>
-    <button id="closeWorkbench" class="floatButton"
-      style="width:38px;height:38px;font-size:21px">×</button>
+    <button id="closeWorkbench" class="floatButton" style="width:38px;height:38px;font-size:21px">×</button>
   </header>
-
   <div class="sidebarBody">
-
     <section>
       <h2>🔌 OpenAI 真實連線</h2>
       <div id="status">正在連接 Bridge……</div>
-      <button id="testBridge" class="action primary">
-        測試 OpenAI 真實連線
-      </button>
-      <button id="reloadBridge" class="action">
-        重新連接 Bridge
-      </button>
+      <button id="testBridge" class="action primary">測試 OpenAI 真實連線</button>
+      <button id="reloadBridge" class="action">重新連接 Bridge</button>
       <div id="aiTestResult">等待測試。</div>
     </section>
 
     <section>
       <h2>STEP 01｜自由拼接</h2>
-      <p class="muted">
-        創造角色、動物、建築、地形，
-        或任何想像中的作品。
-      </p>
+      <p class="muted">孩子可以創造任何角色、建築、地形或想像中的物件。</p>
     </section>
 
     <section>
-      <h2>STEP 02｜拍照、AI 去背與手動修圖</h2>
-      <button id="openCamera" class="action primary">
-        📷 開啟攝影機
-      </button>
-      <button id="uploadPhoto" class="action">
-        🖼️ 上傳照片
-      </button>
-      <input id="photoFile" type="file"
-        accept="image/*" class="hidden">
-      <p class="muted">
-        去背成功後可以使用橡皮擦與恢復筆刷，
-        最後由孩子決定何時完成。
-      </p>
+      <h2>STEP 02｜拍照與 AI 去背</h2>
+      <button id="openCamera" class="action primary">📷 開啟攝影機</button>
+      <button id="uploadPhoto" class="action">🖼️ 上傳照片</button>
+      <input id="photoFile" type="file" accept="image/*" class="hidden">
+      <p class="muted">去背成功後，可以用橡皮擦、恢復筆刷及復原功能調整圖片。</p>
     </section>
 
     <section>
       <h2>STEP 03～05｜共同世界</h2>
       <div id="heroList">目前還沒有作品。</div>
-      <button id="clearWorld" class="action">
-        清空目前世界
-      </button>
-    </section>
-
-    <section>
-      <h2>STEP 04｜角色與環境</h2>
-      <p class="muted">
-        孩子可以自行決定作品是角色還是環境。
-        AI 自動辨識與世界延伸會在下一版接入。
-      </p>
-      <textarea id="creationDescription"
-        class="field" rows="3"
-        placeholder="例如：這是一隻會飛的魚"></textarea>
-      <button id="generateCreationWorld" class="action">
-        ✨ AI 世界生成（下一階段）
-      </button>
+      <button id="clearWorld" class="action">清空目前世界</button>
     </section>
 
     <section>
       <h2>STEP 06｜語音自由創造</h2>
-      <textarea id="chatInput" class="field"
-        rows="2"
-        placeholder="例如：讓我的龍長出彩虹翅膀"></textarea>
-      <button id="micButton" class="action">
-        🎙️ 語音創作（下一階段）
-      </button>
+      <p class="muted">下一階段加入語音變身、技能、配角、環境修改與故事。</p>
+      <textarea id="chatInput" class="field" rows="2" placeholder="例如：讓我的龍長出彩虹翅膀"></textarea>
+      <button id="micButton" class="action">🎙️ 語音創作（下一階段）</button>
     </section>
-
   </div>
 </aside>
 
@@ -274,104 +117,66 @@ section h2{font-size:16px;margin:0 0 12px}
   <div class="modalCard">
     <h2>📷 拍攝 Plus-Plus 積木</h2>
     <video id="cameraVideo" autoplay playsinline muted></video>
-    <p id="cameraMessage" class="muted">
-      將作品放在畫面中央。
-    </p>
+    <p id="cameraMessage" class="muted">將作品放在畫面中央。</p>
     <button id="captureButton" class="action primary">拍照</button>
     <button id="switchCamera" class="action">切換鏡頭</button>
     <button id="closeCamera" class="action">關閉</button>
   </div>
 </div>
 
-<!-- AI 去背與編輯器 -->
+<!-- 去背與修圖 -->
 <div id="editorModal" class="modal hidden">
   <div class="modalCard">
-
     <h2>✨ 積木去背與修圖</h2>
-
-    <div id="editArea">
-      <canvas id="editCanvas"></canvas>
-    </div>
-
-    <p id="editorMessage" class="muted">
-      準備進行 AI 去背。
-    </p>
-
-    <button id="removeBgAI" class="action primary">
-      開始 AI 去背
-    </button>
+    <div id="editArea"><canvas id="editCanvas"></canvas></div>
+    <p id="editorMessage" class="muted">準備進行 AI 去背。</p>
+    <button id="removeBgAI" class="action primary">開始 AI 去背</button>
 
     <div id="editTools" class="hidden">
-
       <div class="toolRow">
-        <button id="eraserTool" class="active">
-          🧽 橡皮擦
-        </button>
-        <button id="restoreTool">
-          🖌️ 恢復筆刷
-        </button>
+        <button id="eraserTool" class="active">🧽 橡皮擦</button>
+        <button id="restoreTool">🖌️ 恢復筆刷</button>
       </div>
-
       <div class="sliderRow">
         <label for="brushSize">筆刷</label>
-        <input id="brushSize" type="range"
-          min="5" max="120" value="30">
+        <input id="brushSize" type="range" min="5" max="120" value="30">
         <span id="brushSizeValue">30</span>
       </div>
-
       <div class="toolRow">
         <button id="undoEdit">↶ 復原</button>
         <button id="redoEdit">↷ 重做</button>
         <button id="resetEdit">重設修圖</button>
       </div>
-
-      <button id="saveEditor" class="action primary">
-        ✓ 完成修圖，加入世界
-      </button>
-
+      <button id="saveEditor" class="action primary">✓ 完成修圖，加入世界</button>
     </div>
 
-    <button id="closeEditor" class="action">
-      取消
-    </button>
-
+    <button id="closeEditor" class="action">取消</button>
   </div>
 </div>
 
-<!-- 孩子指定角色或環境 -->
+<!-- AI 角色／環境判斷 -->
 <div id="classificationModal" class="modal hidden">
   <div class="modalCard">
-
     <h2>🌟 你創造了什麼？</h2>
+    <img id="classificationPreview" alt="積木作品">
+    <p class="muted">先告訴 AI 你的想像。AI 會提出建議，但最後由你決定。</p>
 
-    <img id="classificationPreview"
-      alt="孩子創造的積木作品">
+    <textarea id="classificationDescription" class="field" rows="3"
+      placeholder="例如：這是一隻會在天空游泳的魚，牠很害羞"></textarea>
 
-    <p class="muted">
-      這是你創造的世界，由你決定它是什麼。
-    </p>
+    <button id="analyzeCreationAI" class="action primary">✨ 讓 AI 理解我的作品</button>
 
+    <div id="aiSuggestion">等待孩子描述作品。</div>
+
+    <p class="muted">你可以接受 AI 的判斷，也可以自己更正：</p>
     <div class="row">
-      <button id="classifyCharacter" class="typeButton">
-        🐉 Character<br>角色
-      </button>
-      <button id="classifyEnvironment" class="typeButton">
-        🏰 Environment<br>環境
-      </button>
+      <button id="classifyCharacter" class="typeButton">🐉 Character<br>角色</button>
+      <button id="classifyEnvironment" class="typeButton">🏰 Environment<br>環境</button>
     </div>
 
-    <textarea id="classificationDescription"
-      class="field" rows="3"
-      placeholder="告訴我們你的作品是什麼？有什麼特別的地方？"></textarea>
-
-    <p id="classificationMessage" class="muted">
-      請選擇角色或環境。
-    </p>
-
-    <button id="confirmClassification" class="action primary">
-      確認我的創作
-    </button>
-
+    <p id="classificationMessage" class="muted">請選擇角色或環境。</p>
+    <button id="confirmClassification" class="action primary">確認我的創作</button>
+    <button id="skipClassification" class="action">稍後再決定</button>
   </div>
 </div>
 
@@ -401,19 +206,16 @@ let facingMode = "environment";
 let currentPhoto = "";
 let processing = false;
 
-/* 編輯器資料 */
 const editCanvas = $("editCanvas");
-const editCtx = editCanvas.getContext(
-  "2d",
-  {willReadFrequently:true}
-);
+const editCtx = editCanvas.getContext("2d", {
+  willReadFrequently: true
+});
 
 let editReady = false;
 let editMode = "erase";
 let brushSize = 30;
 let isDrawing = false;
 let lastPoint = null;
-
 let originalCutout = null;
 let editHistory = [];
 let editHistoryIndex = -1;
@@ -422,6 +224,8 @@ const MAX_HISTORY = 12;
 let latestCreationId = null;
 let latestCreationImage = "";
 let selectedType = "";
+let aiSuggestion = null;
+let analyzing = false;
 
 function say(message) {
   $("speechBubble").textContent = message;
@@ -462,7 +266,7 @@ $("bubbleWorkbench").onclick = () =>
 $("closeWorkbench").onclick = () =>
   $("sidebar").classList.remove("open");
 
-/* Bridge */
+/* Bridge：沿用已成功的通訊協定 */
 
 function connectBridge() {
   bridgeGeneration++;
@@ -502,20 +306,17 @@ function connectBridge() {
 
     try {
       frame.contentWindow.postMessage({
-        app:APP,
-        token:bridgeToken,
-        kind:"hello"
+        app: APP,
+        token: bridgeToken,
+        kind: "hello"
       }, "https://script.google.com");
     } catch {}
-  },1000);
+  }, 1000);
 
   bridgeTimer = setTimeout(() => {
-    if (generation !== bridgeGeneration || bridgeReady) {
-      return;
-    }
-
-    setStatus("Bridge 握手逾時","error");
-  },15000);
+    if (generation !== bridgeGeneration || bridgeReady) return;
+    setStatus("Bridge 握手逾時", "error");
+  }, 15000);
 }
 
 window.addEventListener("message", event => {
@@ -540,7 +341,6 @@ window.addEventListener("message", event => {
     setStatus("Bridge 已建立通訊");
     $("aiTestResult").textContent =
       "可以測試 OpenAI 真實連線。";
-
     return;
   }
 
@@ -562,7 +362,7 @@ window.addEventListener("message", event => {
   }
 });
 
-function requestAI(type,data={},timeout=90000) {
+function requestAI(type, data = {}, timeout = 90000) {
   if (!bridgeReady || !bridgeWindow) {
     return Promise.reject(
       new Error("Bridge 尚未連線")
@@ -571,24 +371,24 @@ function requestAI(type,data={},timeout=90000) {
 
   const id = crypto.randomUUID();
 
-  return new Promise((resolve,reject) => {
+  return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
-      reject(new Error(type+" 請求逾時"));
-    },timeout);
+      reject(new Error(type + " 請求逾時"));
+    }, timeout);
 
-    pending.set(id,{resolve,reject,timer});
+    pending.set(id, {resolve, reject, timer});
 
     try {
       bridgeWindow.postMessage({
-        app:APP,
-        token:bridgeToken,
-        kind:"request",
+        app: APP,
+        token: bridgeToken,
+        kind: "request",
         id,
         type,
         data
-      },bridgeOrigin);
-    } catch(error) {
+      }, bridgeOrigin);
+    } catch (error) {
       clearTimeout(timer);
       pending.delete(id);
       reject(error);
@@ -606,10 +406,7 @@ $("testBridge").onclick = async () => {
     setStatus("正在測試 OpenAI……");
 
     const ping = await requestAI("ping");
-
-    if (!ping.alive) {
-      throw new Error("後端 ping 失敗");
-    }
+    if (!ping.alive) throw new Error("後端 ping 失敗");
 
     const ai = await requestAI("checkAI");
 
@@ -617,26 +414,26 @@ $("testBridge").onclick = async () => {
       throw new Error("OpenAI 驗證失敗");
     }
 
-    setStatus("OpenAI 真實連線成功","success");
+    setStatus("OpenAI 真實連線成功", "success");
 
     $("aiTestResult").textContent =
-      "模型："+ai.model+"\n"+
-      "請求 ID："+ai.responseId+"\n"+
-      "驗證碼："+ai.challenge+"\n\n"+
+      "模型：" + ai.model + "\n" +
+      "請求 ID：" + ai.responseId + "\n" +
+      "驗證碼：" + ai.challenge + "\n\n" +
       ai.text;
 
-  } catch(error) {
-    setStatus("AI 連線失敗","error");
+  } catch (error) {
+    setStatus("AI 連線失敗", "error");
     $("aiTestResult").textContent = error.message;
   } finally {
     button.disabled = false;
   }
 };
 
-/* 圖片載入 */
+/* 圖片工具 */
 
-function loadImageElement(src,revoke=false) {
-  return new Promise((resolve,reject) => {
+function loadImageElement(src, revoke = false) {
+  return new Promise((resolve, reject) => {
     const image = new Image();
 
     image.onload = () => {
@@ -653,35 +450,28 @@ function loadImageElement(src,revoke=false) {
   });
 }
 
-function canvasToPhoto(source,width,height) {
+function canvasToPhoto(source, width, height) {
   const limit = 900;
-  const scale = Math.min(
-    1,
-    limit / Math.max(width,height)
-  );
+  const scale = Math.min(1, limit / Math.max(width, height));
 
   const canvas = document.createElement("canvas");
-
-  canvas.width = Math.round(width*scale);
-  canvas.height = Math.round(height*scale);
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
 
   canvas.getContext("2d").drawImage(
-    source,0,0,canvas.width,canvas.height
+    source, 0, 0, canvas.width, canvas.height
   );
 
-  return canvas.toDataURL("image/jpeg",.83);
+  return canvas.toDataURL("image/jpeg", .83);
 }
 
 /* 攝影機 */
 
 async function stopCamera() {
   if (cameraStream) {
-    cameraStream.getTracks().forEach(
-      track => track.stop()
-    );
+    cameraStream.getTracks().forEach(track => track.stop());
     cameraStream = null;
   }
-
   $("cameraVideo").srcObject = null;
 }
 
@@ -694,25 +484,24 @@ async function startCamera() {
 
     cameraStream =
       await navigator.mediaDevices.getUserMedia({
-        audio:false,
-        video:{
-          facingMode:{ideal:facingMode},
-          width:{ideal:1280},
-          height:{ideal:720}
+        audio: false,
+        video: {
+          facingMode: {ideal: facingMode},
+          width: {ideal: 1280},
+          height: {ideal: 720}
         }
       });
 
     const video = $("cameraVideo");
     video.srcObject = cameraStream;
-
     await video.play();
 
     $("cameraMessage").textContent =
       "將積木放在中央，按下拍照。";
 
-  } catch(error) {
+  } catch (error) {
     $("cameraMessage").textContent =
-      "攝影機開啟失敗："+error.message;
+      "攝影機開啟失敗：" + error.message;
   }
 }
 
@@ -721,9 +510,7 @@ $("bubbleCamera").onclick = startCamera;
 
 $("switchCamera").onclick = async () => {
   facingMode =
-    facingMode === "environment"
-      ? "user" : "environment";
-
+    facingMode === "environment" ? "user" : "environment";
   await startCamera();
 };
 
@@ -736,27 +523,20 @@ $("captureButton").onclick = async () => {
   const video = $("cameraVideo");
 
   if (!video.videoWidth || !video.videoHeight) {
-    $("cameraMessage").textContent =
-      "攝影機尚未準備完成。";
+    $("cameraMessage").textContent = "攝影機尚未準備完成。";
     return;
   }
 
   currentPhoto = canvasToPhoto(
-    video,
-    video.videoWidth,
-    video.videoHeight
+    video, video.videoWidth, video.videoHeight
   );
 
   await stopCamera();
   closeModal("cameraModal");
-
   await showEditor();
 };
 
-/* 上傳照片 */
-
-$("uploadPhoto").onclick = () =>
-  $("photoFile").click();
+$("uploadPhoto").onclick = () => $("photoFile").click();
 
 $("photoFile").onchange = async event => {
   const file = event.target.files?.[0];
@@ -764,26 +544,23 @@ $("photoFile").onchange = async event => {
 
   try {
     const image = await loadImageElement(
-      URL.createObjectURL(file),
-      true
+      URL.createObjectURL(file), true
     );
 
     currentPhoto = canvasToPhoto(
-      image,
-      image.naturalWidth,
-      image.naturalHeight
+      image, image.naturalWidth, image.naturalHeight
     );
 
     await showEditor();
 
-  } catch(error) {
-    alert("照片讀取失敗："+error.message);
+  } catch (error) {
+    alert("照片讀取失敗：" + error.message);
   }
 
   event.target.value = "";
 };
 
-/* 編輯器初始化 */
+/* 去背編輯器 */
 
 async function showEditor() {
   editReady = false;
@@ -793,9 +570,7 @@ async function showEditor() {
 
   $("editTools").classList.add("hidden");
   $("removeBgAI").classList.remove("hidden");
-
-  $("editorMessage").textContent =
-    "請先執行 AI 去背。";
+  $("editorMessage").textContent = "請先執行 AI 去背。";
 
   const image = await loadImageElement(currentPhoto);
 
@@ -803,26 +578,20 @@ async function showEditor() {
   editCanvas.height = image.naturalHeight;
 
   editCtx.clearRect(
-    0,0,editCanvas.width,editCanvas.height
+    0, 0, editCanvas.width, editCanvas.height
   );
 
   editCtx.drawImage(
-    image,
-    0,0,
-    editCanvas.width,
-    editCanvas.height
+    image, 0, 0, editCanvas.width, editCanvas.height
   );
 
   openModal("editorModal");
 }
 
-/* 真實 AI 去背 */
-
 $("removeBgAI").onclick = async () => {
   if (processing || !currentPhoto) return;
 
   processing = true;
-
   const button = $("removeBgAI");
   button.disabled = true;
   button.textContent = "AI 去背處理中……";
@@ -833,43 +602,34 @@ $("removeBgAI").onclick = async () => {
   try {
     const response = await requestAI(
       "removeBackgroundAI",
-      {image:currentPhoto},
+      {image: currentPhoto},
       180000
     );
 
     if (
       !response?.success ||
       typeof response.image !== "string" ||
-      !response.image.startsWith(
-        "data:image/png;base64,"
-      )
+      !response.image.startsWith("data:image/png;base64,")
     ) {
-      throw new Error("後端未回傳有效的 PNG");
+      throw new Error("後端未回傳有效的去背 PNG");
     }
 
-    const image = await loadImageElement(
-      response.image
-    );
-
+    const image = await loadImageElement(response.image);
     originalCutout = image;
 
     editCanvas.width = image.naturalWidth;
     editCanvas.height = image.naturalHeight;
 
     editCtx.clearRect(
-      0,0,editCanvas.width,editCanvas.height
+      0, 0, editCanvas.width, editCanvas.height
     );
 
     editCtx.drawImage(
-      image,
-      0,0,
-      editCanvas.width,
-      editCanvas.height
+      image, 0, 0, editCanvas.width, editCanvas.height
     );
 
     editReady = true;
     editMode = "erase";
-
     setActiveTool();
 
     editHistory = [];
@@ -880,12 +640,11 @@ $("removeBgAI").onclick = async () => {
     button.classList.add("hidden");
 
     $("editorMessage").textContent =
-      "AI 去背完成！可以使用橡皮擦修正邊緣，"+
-      "或使用恢復筆刷找回誤刪的部分。";
+      "AI 去背完成！現在可以修正圖片，完成後加入世界。";
 
-  } catch(error) {
+  } catch (error) {
     $("editorMessage").textContent =
-      "去背未完成："+error.message;
+      "去背未完成：" + error.message;
   } finally {
     processing = false;
     button.disabled = false;
@@ -893,15 +652,15 @@ $("removeBgAI").onclick = async () => {
   }
 };
 
-/* 橡皮擦／恢復筆刷 */
+/* 橡皮擦、恢復、復原 */
 
 function setActiveTool() {
   $("eraserTool").classList.toggle(
-    "active",editMode === "erase"
+    "active", editMode === "erase"
   );
 
   $("restoreTool").classList.toggle(
-    "active",editMode === "restore"
+    "active", editMode === "restore"
   );
 }
 
@@ -924,40 +683,33 @@ function pointerPosition(event) {
   const rect = editCanvas.getBoundingClientRect();
 
   return {
-    x:(event.clientX-rect.left)*
-      editCanvas.width/rect.width,
-    y:(event.clientY-rect.top)*
-      editCanvas.height/rect.height
+    x: (event.clientX - rect.left) *
+      editCanvas.width / rect.width,
+    y: (event.clientY - rect.top) *
+      editCanvas.height / rect.height
   };
 }
 
-function paintCircle(x,y) {
-  const radius = brushSize/2;
+function paintCircle(x, y) {
+  const radius = brushSize / 2;
 
   if (editMode === "erase") {
     editCtx.save();
-
-    editCtx.globalCompositeOperation =
-      "destination-out";
-
+    editCtx.globalCompositeOperation = "destination-out";
     editCtx.beginPath();
-    editCtx.arc(x,y,radius,0,Math.PI*2);
+    editCtx.arc(x, y, radius, 0, Math.PI * 2);
     editCtx.fill();
-
     editCtx.restore();
 
   } else if (originalCutout) {
-    // 恢復去背後的原始透明 PNG 像素，
-    // 而不是恢復未去背的背景。
     editCtx.save();
-
     editCtx.beginPath();
-    editCtx.arc(x,y,radius,0,Math.PI*2);
+    editCtx.arc(x, y, radius, 0, Math.PI * 2);
     editCtx.clip();
 
     editCtx.drawImage(
       originalCutout,
-      0,0,
+      0, 0,
       editCanvas.width,
       editCanvas.height
     );
@@ -966,92 +718,70 @@ function paintCircle(x,y) {
   }
 }
 
-function paintLine(from,to) {
+function paintLine(from, to) {
   const distance = Math.hypot(
-    to.x-from.x,to.y-from.y
+    to.x - from.x, to.y - from.y
   );
 
   const steps = Math.max(
     1,
-    Math.ceil(distance/Math.max(1,brushSize/5))
+    Math.ceil(distance / Math.max(1, brushSize / 5))
   );
 
-  for (let i=0;i<=steps;i++) {
-    const t=i/steps;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
 
     paintCircle(
-      from.x+(to.x-from.x)*t,
-      from.y+(to.y-from.y)*t
+      from.x + (to.x - from.x) * t,
+      from.y + (to.y - from.y) * t
     );
   }
 }
 
-editCanvas.addEventListener(
-  "pointerdown",
-  event => {
-    if (!editReady) return;
+editCanvas.addEventListener("pointerdown", event => {
+  if (!editReady) return;
 
-    event.preventDefault();
+  event.preventDefault();
+  isDrawing = true;
 
-    isDrawing = true;
-    editCanvas.setPointerCapture(event.pointerId);
+  editCanvas.setPointerCapture(event.pointerId);
+  lastPoint = pointerPosition(event);
 
-    lastPoint = pointerPosition(event);
+  paintCircle(lastPoint.x, lastPoint.y);
+});
 
-    paintCircle(lastPoint.x,lastPoint.y);
-  }
-);
+editCanvas.addEventListener("pointermove", event => {
+  if (!isDrawing || !editReady) return;
 
-editCanvas.addEventListener(
-  "pointermove",
-  event => {
-    if (!isDrawing || !editReady) return;
+  event.preventDefault();
 
-    event.preventDefault();
-
-    const point = pointerPosition(event);
-
-    paintLine(lastPoint,point);
-    lastPoint = point;
-  }
-);
+  const point = pointerPosition(event);
+  paintLine(lastPoint, point);
+  lastPoint = point;
+});
 
 function finishDrawing() {
   if (!isDrawing) return;
 
   isDrawing = false;
   lastPoint = null;
-
   saveHistory();
 }
 
-editCanvas.addEventListener(
-  "pointerup",finishDrawing
-);
-
-editCanvas.addEventListener(
-  "pointercancel",finishDrawing
-);
-
-editCanvas.addEventListener(
-  "lostpointercapture",finishDrawing
-);
-
-/* 復原與重做 */
+editCanvas.addEventListener("pointerup", finishDrawing);
+editCanvas.addEventListener("pointercancel", finishDrawing);
+editCanvas.addEventListener("lostpointercapture", finishDrawing);
 
 function saveHistory() {
   if (!editReady) return;
 
   editHistory = editHistory.slice(
-    0,
-    editHistoryIndex+1
+    0, editHistoryIndex + 1
   );
 
   editHistory.push(
     editCtx.getImageData(
-      0,0,
-      editCanvas.width,
-      editCanvas.height
+      0, 0, editCanvas.width, editCanvas.height
     )
   );
 
@@ -1059,7 +789,7 @@ function saveHistory() {
     editHistory.shift();
   }
 
-  editHistoryIndex = editHistory.length-1;
+  editHistoryIndex = editHistory.length - 1;
 }
 
 function restoreHistory() {
@@ -1068,28 +798,19 @@ function restoreHistory() {
     !editHistory[editHistoryIndex]
   ) return;
 
-  editCtx.clearRect(
-    0,0,editCanvas.width,editCanvas.height
-  );
-
   editCtx.putImageData(
-    editHistory[editHistoryIndex],
-    0,0
+    editHistory[editHistoryIndex], 0, 0
   );
 }
 
 $("undoEdit").onclick = () => {
   if (editHistoryIndex <= 0) return;
-
   editHistoryIndex--;
   restoreHistory();
 };
 
 $("redoEdit").onclick = () => {
-  if (
-    editHistoryIndex >= editHistory.length-1
-  ) return;
-
+  if (editHistoryIndex >= editHistory.length - 1) return;
   editHistoryIndex++;
   restoreHistory();
 };
@@ -1098,20 +819,18 @@ $("resetEdit").onclick = () => {
   if (!editReady || !originalCutout) return;
 
   editCtx.clearRect(
-    0,0,editCanvas.width,editCanvas.height
+    0, 0, editCanvas.width, editCanvas.height
   );
 
   editCtx.drawImage(
     originalCutout,
-    0,0,
-    editCanvas.width,
-    editCanvas.height
+    0, 0, editCanvas.width, editCanvas.height
   );
 
   saveHistory();
 };
 
-/* 完成編輯，加入 p5.js */
+/* 作品立即進入世界 */
 
 $("saveEditor").onclick = async () => {
   if (!editReady) return;
@@ -1133,37 +852,34 @@ $("saveEditor").onclick = async () => {
 
     latestCreationImage = png;
 
-    // 加入世界後才關閉編輯器。
     closeModal("editorModal");
-
-    currentPhoto = "";
     $("sidebar").classList.remove("open");
 
+    currentPhoto = "";
+
+    // 積木已經先進入世界。
+    // 不需要等待 AI 辨識。
     say("你的積木已經進入 Mindspace！");
 
-    // 接著讓孩子決定作品類型。
     selectedType = "";
+    aiSuggestion = null;
 
-    $("classifyCharacter").classList.remove(
-      "selected"
-    );
-    $("classifyEnvironment").classList.remove(
-      "selected"
-    );
+    $("classifyCharacter").classList.remove("selected");
+    $("classifyEnvironment").classList.remove("selected");
 
     $("classificationPreview").src = png;
-
-    $("classificationDescription").value =
-      $("creationDescription").value;
+    $("classificationDescription").value = "";
+    $("aiSuggestion").textContent =
+      "你可以描述作品，再讓 AI 提出建議。";
 
     $("classificationMessage").textContent =
-      "請選擇這個作品是角色還是環境。";
+      "AI 的判斷可以更正，最後由你決定。";
 
     openModal("classificationModal");
 
-  } catch(error) {
+  } catch (error) {
     $("editorMessage").textContent =
-      "加入世界失敗："+error.message;
+      "加入世界失敗：" + error.message;
   } finally {
     button.disabled = false;
   }
@@ -1171,29 +887,26 @@ $("saveEditor").onclick = async () => {
 
 $("closeEditor").onclick = () => {
   if (processing) return;
-
   closeModal("editorModal");
 };
 
-/* 角色／環境：孩子自行決定 */
+/* 真正的 AI 角色／環境辨識 */
 
 function selectCreationType(type) {
   selectedType = type;
 
   $("classifyCharacter").classList.toggle(
-    "selected",
-    type === "character"
+    "selected", type === "character"
   );
 
   $("classifyEnvironment").classList.toggle(
-    "selected",
-    type === "environment"
+    "selected", type === "environment"
   );
 
   $("classificationMessage").textContent =
     type === "character"
-      ? "你選擇了角色！"
-      : "你選擇了環境！";
+      ? "目前選擇：Character 角色"
+      : "目前選擇：Environment 環境";
 }
 
 $("classifyCharacter").onclick = () =>
@@ -1202,7 +915,79 @@ $("classifyCharacter").onclick = () =>
 $("classifyEnvironment").onclick = () =>
   selectCreationType("environment");
 
+$("analyzeCreationAI").onclick = async () => {
+  if (analyzing || !latestCreationImage) return;
+
+  analyzing = true;
+
+  const button = $("analyzeCreationAI");
+  button.disabled = true;
+  button.textContent = "OpenAI 正在理解作品……";
+
+  $("aiSuggestion").textContent =
+    "正在分析積木外型與孩子的描述……";
+
+  try {
+    const description =
+      $("classificationDescription").value.trim();
+
+    const result = await requestAI(
+      "classifyCreationAI",
+      {
+        image: latestCreationImage,
+        description: description
+      },
+      120000
+    );
+
+    if (
+      !result?.success ||
+      !result.suggestion ||
+      !result.responseId
+    ) {
+      throw new Error("OpenAI 未回傳有效辨識資料");
+    }
+
+    aiSuggestion = result.suggestion;
+
+    // 如果孩子尚未自行選擇，才套用 AI 建議。
+    if (!selectedType) {
+      selectCreationType(aiSuggestion.kind);
+    }
+
+    $("aiSuggestion").textContent =
+      "AI 建議：" +
+      (aiSuggestion.kind === "character"
+        ? "Character 角色"
+        : "Environment 環境") +
+      "\n名稱：" + aiSuggestion.name +
+      "\n原因：" + aiSuggestion.reason +
+      "\n\nOpenAI 請求 ID：" + result.responseId;
+
+    $("classificationMessage").textContent =
+      "可以接受 AI 的建議，或點擊另一個類型更正。";
+
+  } catch (error) {
+    aiSuggestion = null;
+
+    $("aiSuggestion").textContent =
+      "AI 辨識失敗：" + error.message;
+
+    $("classificationMessage").textContent =
+      "你仍可以自行選擇角色或環境。";
+
+  } finally {
+    analyzing = false;
+    button.disabled = false;
+    button.textContent = "✨ 讓 AI 理解我的作品";
+  }
+};
+
+/* 確認並讓 p5.js 套用 */
+
 $("confirmClassification").onclick = () => {
+  if (analyzing) return;
+
   if (!selectedType) {
     $("classificationMessage").textContent =
       "請先選擇角色或環境。";
@@ -1212,58 +997,67 @@ $("confirmClassification").onclick = () => {
   const description =
     $("classificationDescription").value.trim();
 
-  const item = window.mindspaceCreations?.find(
-    creation => creation.id === latestCreationId
+  if (
+    typeof window.applyMindspaceClassification !== "function"
+  ) {
+    $("classificationMessage").textContent =
+      "sketch.js 尚未支援角色／環境分類。";
+    return;
+  }
+
+  const success = window.applyMindspaceClassification(
+    latestCreationId,
+    selectedType,
+    description,
+    aiSuggestion
   );
 
-  if (item) {
-    item.kind = selectedType;
-    item.description = description;
+  if (!success) {
+    $("classificationMessage").textContent =
+      "找不到對應的積木作品。";
+    return;
   }
 
   closeModal("classificationModal");
 
   say(
     selectedType === "character"
-      ? "你的角色已經加入世界！"
-      : "你的環境作品已經加入世界！"
+      ? "你的角色開始探索世界了！"
+      : "你的環境已經延伸到 Mindspace！"
   );
-
-  $("creationDescription").value = "";
 };
 
-/* 世界清單 */
+$("skipClassification").onclick = () => {
+  if (analyzing) return;
+
+  closeModal("classificationModal");
+  say("作品已經留在世界中，可以繼續創造！");
+};
+
+/* 作品數量 */
 
 window.updateMindspaceCount = count => {
   $("heroList").textContent =
     count === 0
       ? "目前還沒有作品。"
-      : "目前世界中有 "+count+" 個積木作品。";
+      : "目前世界中有 " + count + " 個積木作品。";
 };
 
 $("clearWorld").onclick = () => {
-  if (!confirm("確定要清空所有作品嗎？")) {
-    return;
-  }
-
+  if (!confirm("確定要清空所有作品嗎？")) return;
   window.clearMindspaceWorld?.();
 };
 
-/* 尚未實作的 AI 生成與語音 */
-
-$("generateCreationWorld").onclick = () => {
-  say("下一階段接入 AI 角色與環境生成。");
-};
+/* 下一階段語音 */
 
 $("bubbleMic").onclick =
 $("micButton").onclick = () => {
-  say("下一階段接入 AI 語音自由創作。");
+  say("下一階段將加入真正的語音變身與自由創作。");
 };
 
 connectBridge();
 </script>
 
 <script src="./sketch.js"></script>
-
 </body>
 </html>
