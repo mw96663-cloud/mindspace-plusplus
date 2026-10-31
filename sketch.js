@@ -6155,3 +6155,31 @@ if (
 }
 
 /* ===== sketch.js 第四段結束 ===== */
+
+/* ===== 同步工作台開關狀態 ===== */
+
+(function installWorkbenchLayoutFix() {
+  const sidebar = document.getElementById("sidebar");
+
+  if (!sidebar) return;
+
+  function syncWorkbenchLayout() {
+    const isOpen = sidebar.classList.contains("is-open");
+
+    document.body.classList.toggle(
+      "workbench-open",
+      isOpen
+    );
+  }
+
+  const observer = new MutationObserver(
+    syncWorkbenchLayout
+  );
+
+  observer.observe(sidebar, {
+    attributes: true,
+    attributeFilter: ["class"]
+  });
+
+  syncWorkbenchLayout();
+})();
