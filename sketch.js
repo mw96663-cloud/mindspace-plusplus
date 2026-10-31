@@ -1,27 +1,33 @@
 
 /**
- * Plus-Plus Layered World
- * GitHub + Mindspace V2 GAS Bridge
+ * Plus-Plus Interactive World
+ * Frontend / sketch.js
+ * GitHub Pages + Mindspace V2 GAS Bridge
  */
 
 "use strict";
 
 const GAS_URL =
-  "https://script.google.com/macros/s/AKfycbxVswrdmiv0CjmI2Na13dEFDGKIjjB-Sb3pG57Nj6j_hf3blMEWenCUoFn2rsLNsQXx/exec";
+  "https://script.google.com/macros/s/AKfycbwUooMD69_NMBhTzxf0Os_D6BEGb3QsGyhXpTGv09emRcG_4du219K4qO_FggY1vnLHOg/exec";
 
 const APP_ID = "mindspace-v2";
 const $ = id => document.getElementById(id);
+const clamp = (n,a,b) => Math.max(a,Math.min(b,n));
+const uid = () => Date.now().toString(36) +
+  Math.random().toString(36).slice(2,10);
 
 const S = {
   bridgeReady:false,
-  bridgeOrigin:"",
   bridgeWindow:null,
-  token:"",
-  requests:new Map(),
+  bridgeOrigin:"",
+  bridgeToken:"",
+  pending:new Map(),
   serial:0,
+  reconnectCount:0,
+  bridgeTimer:null,
   busy:false,
-  stage:"等待開始",
   error:"",
+  stage:"初始化中",
   heroes:[],
   selectedId:null,
   worldImage:null,
@@ -31,227 +37,281 @@ const S = {
   environmentObjects:[],
   lastPhoto:null,
   lastInfo:null,
-  arrival:null,
   particles:[],
   ambient:[],
   soundOn:true,
+  cameraStream:null,
+  editorOriginal:null,
+  editorHistory:[],
+  editorMode:"erase",
+  editorPainting:false,
+  editorPrevious:null,
   recognition:null,
   listening:false,
-  cameraStream:null,
   audioContext:null
 };
 
-function uid() {
-  return Date.now().toString(36) +
-    Math.random().toString(36).slice(2,10);
+/* =========================================
+   安全 DOM 操作與狀態
+========================================= */
+
+function bind(id,handler) {
+  const element=$(id);
+  if(!element) {
+    console.warn("找不到元素："+id);
+    return;
+  }
+  element.addEventListener("click",event=>{
+    try {
+      const result=handler(event);
+      if(result?.catch) {
+        result.catch(error=>fail(id,error));
+      }
+    } catch(error) {
+      fail(id,error);
+    }
+  });
 }
-function clamp(n,a,b) {
-  return Math.max(a,Math.min(b,n));
-}
-function pause(ms) {
-  return new Promise(r=>setTimeout(r,ms));
-}
+
 function status(message) {
   S.stage=message;
-  const node=$("status");
-  if (node) {
-    node.textContent =
-      "狀態："+message+
+  const element=$("status");
+  if(element) {
+    element.textContent=
+      "目前狀態："+message+
       "\nAI Bridge："+(S.bridgeReady?"已連線":"未連線")+
-      "\n角色："+S.heroes.length+
+      "\n角色數量："+S.heroes.length+
       "\n背景物件："+S.environmentObjects.length+
       "\n世界："+S.worldName+
       (S.error?"\n錯誤："+S.error:"");
   }
-  console.log("[PlusPlus]",message);
+  console.log("[Plus-Plus]",message);
 }
+
 function notice(message,loading=false) {
-  $("messageText").textContent=message;
+  const panel=$("message");
+  if(!panel)return;
+  $("messageText").textContent=String(message);
   $("loading").hidden=!loading;
-  $("message").hidden=false;
+  panel.hidden=false;
 }
+
 function hideNotice() {
-  $("message").hidden=true;
+  if($("message"))$("message").hidden=true;
 }
+
 function busy(value,message="") {
-  S.busy=value;
-  $("photo").disabled=value;
-  $("mic").disabled=value;
+  S.busy=!!value;
+  if($("photo"))$("photo").disabled=!!value;
+  if($("mic"))$("mic").disabled=!!value;
+  if($("sendText"))$("sendText").disabled=!!value;
   if(value&&message)notice(message,true);
-  if(!value)$("loading").hidden=true;
+  if(!value&&$("loading"))$("loading").hidden=true;
 }
+
 function fail(label,error) {
-  S.error=label+"："+(error?.message||String(error));
-  console.error("[PlusPlus]",label,error);
+  const detail=error?.message||String(error);
+  S.error=label+"："+detail;
   status(label+"失敗");
   notice("⚠️ "+S.error);
+  console.error("[Plus-Plus]",label,error);
 }
 
-/* ===== 一評 Bridge 連線 ===== */
-
 function createToken() {
-  if(crypto.randomUUID)return crypto.randomUUID();
+  if(window.crypto?.randomUUID) {
+    return crypto.randomUUID();
+  }
   const bytes=new Uint8Array(24);
   crypto.getRandomValues(bytes);
   return Array.from(bytes)
-    .map(n=>n.toString(16).padStart(2,"0")).join("");
+    .map(x=>x.toString(16).padStart(2,"0"))
+    .join("");
 }
 
-function validGoogleOrigin(value) {
+/* =========================================
+   一評 GAS Bridge
+========================================= */
+
+function googleOrigin(origin) {
   try {
-    const u=new URL(value);
-    return u.protocol==="https:" &&
-      (u.hostname==="script.google.com" ||
-       u.hostname==="script.googleusercontent.com" ||
-       u.hostname.endsWith(".googleusercontent.com"));
-  } catch(e) {
+    const url=new URL(origin);
+    const host=url.hostname.toLowerCase();
+    return url.protocol==="https:"&&(
+      host==="script.google.com"||
+      host==="script.googleusercontent.com"||
+      host.endsWith(".googleusercontent.com")
+    );
+  } catch(error) {
     return false;
   }
 }
 
-function initializeBridge() {
-  if(!GAS_URL.includes("/exec")) {
-    status("GAS_URL 尚未設定");
+function onBridgeMessage(event) {
+  const message=event.data;
+
+  if(!googleOrigin(event.origin))return;
+  if(!message||typeof message!=="object")return;
+  if(message.app!==APP_ID)return;
+  if(message.token!==S.bridgeToken)return;
+
+  if(message.kind==="ready") {
+    if(!event.source)return;
+
+    S.bridgeWindow=event.source;
+    S.bridgeOrigin=event.origin;
+    S.bridgeReady=true;
+    S.error="";
+
+    // 沿用一評：由實際發送 ready 的 window 回覆
+    event.source.postMessage({
+      app:APP_ID,
+      kind:"ack",
+      token:S.bridgeToken
+    },"*");
+
+    if(S.bridgeTimer) {
+      clearTimeout(S.bridgeTimer);
+      S.bridgeTimer=null;
+    }
+
+    status("✅ GAS 橋接器已連線");
     return;
   }
 
+  if(message.kind==="response") {
+    const pending=S.pending.get(message.id);
+    if(!pending)return;
+
+    if(event.source!==S.bridgeWindow)return;
+
+    clearTimeout(pending.timer);
+    S.pending.delete(message.id);
+
+    if(message.ok) {
+      pending.resolve(message.result);
+    } else {
+      pending.reject(
+        new Error(message.error||"AI 後端執行失敗")
+      );
+    }
+  }
+}
+
+function initializeBridge() {
   const frame=$("bridge");
+
   if(!frame) {
-    status("找不到 bridge iframe");
+    fail("Bridge","找不到 iframe #bridge");
+    return;
+  }
+
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/
+    .test(GAS_URL)) {
+    fail("Bridge","GAS_URL 格式錯誤");
     return;
   }
 
   S.bridgeReady=false;
-  S.token=createToken();
+  S.bridgeWindow=null;
+  S.bridgeOrigin="";
+  S.bridgeToken=createToken();
 
-  window.addEventListener("message",onBridgeMessage);
+  for(const pending of S.pending.values()) {
+    clearTimeout(pending.timer);
+    pending.reject(new Error("Bridge 已重新連線"));
+  }
+  S.pending.clear();
 
   const url=new URL(GAS_URL);
-  url.searchParams.set("bridgeToken",S.token);
-  url.searchParams.set("parentOrigin",location.origin);
+  url.searchParams.set(
+    "bridgeToken",S.bridgeToken
+  );
+  url.searchParams.set(
+    "parentOrigin",location.origin
+  );
 
   frame.src=url.toString();
-  status("正在連線 GAS Bridge");
+  status("正在等待 GAS Bridge 握手……");
 
-  setTimeout(()=>{
+  if(S.bridgeTimer)clearTimeout(S.bridgeTimer);
+
+  S.bridgeTimer=setTimeout(()=>{
     if(!S.bridgeReady) {
-      status("Bridge 尚未回應，請檢查 GAS doGet 和部署");
+      S.error=
+        "15 秒內沒有收到 ready。" +
+        "請確認 GAS /exec 是含 Bridge.html 的部署版本，" +
+        "且允許此 GitHub Pages 網域。";
+      status("⚠️ Bridge 尚未連線");
     }
   },15000);
 }
 
-function onBridgeMessage(event) {
-  const d=event.data;
-
-  if(!validGoogleOrigin(event.origin))return;
-  if(!d||d.app!==APP_ID||d.token!==S.token)return;
-
-  if(d.kind==="ready") {
-    S.bridgeWindow=event.source;
-    S.bridgeOrigin=event.origin;
-    S.bridgeReady=true;
-
-    event.source.postMessage({
-      app:APP_ID,
-      token:S.token,
-      kind:"ack"
-    },event.origin);
-
-    status("GAS Bridge 已連線");
-
-    for(const req of S.requests.values()) {
-      if(!req.sent) {
-        req.sent=true;
-        sendRequest(req.message);
-      }
-    }
-    return;
-  }
-
-  if(d.kind!=="response" ||
-     event.source!==S.bridgeWindow)return;
-
-  const req=S.requests.get(d.id);
-  if(!req)return;
-
-  clearTimeout(req.timer);
-  S.requests.delete(d.id);
-
-  if(d.ok)req.resolve(d.result);
-  else req.reject(new Error(d.error||"AI 執行失敗"));
-}
-
-function sendRequest(message) {
-  if(!S.bridgeWindow||!S.bridgeReady) {
-    throw new Error("Bridge 尚未連線");
-  }
-  S.bridgeWindow.postMessage(message,S.bridgeOrigin);
-}
-
-function ai(route,payload={},timeout=180000) {
+function ai(type,data={},timeout=180000) {
   return new Promise((resolve,reject)=>{
-    if(!S.bridgeReady) {
+    if(!S.bridgeReady||!S.bridgeWindow) {
       reject(new Error(
-        "AI Bridge 未連線。請檢查 GAS 部署與 Bridge.html"
+        "AI Bridge 未連線。" +
+        "請先按工作台的「重新連線」，" +
+        "確認狀態變成已連線。"
       ));
       return;
     }
 
-    const id="r"+(++S.serial);
-    const message={
-      app:APP_ID,
-      token:S.token,
-      kind:"request",
-      id,
-      type:route,
-      data:payload
-    };
+    const id="request-"+(++S.serial)+"-"+uid();
 
     const timer=setTimeout(()=>{
-      S.requests.delete(id);
-      reject(new Error(route+" 等待逾時"));
+      S.pending.delete(id);
+      reject(new Error(
+        "AI 回應逾時："+type
+      ));
     },timeout);
 
-    S.requests.set(id,{
-      resolve,reject,timer,message,sent:true
-    });
+    S.pending.set(id,{resolve,reject,timer});
 
     try {
-      sendRequest(message);
+      S.bridgeWindow.postMessage({
+        app:APP_ID,
+        kind:"request",
+        token:S.bridgeToken,
+        id,
+        type,
+        data
+      },"*");
     } catch(error) {
       clearTimeout(timer);
-      S.requests.delete(id);
+      S.pending.delete(id);
       reject(error);
     }
   });
 }
 
 async function testConnection() {
+  if(!S.bridgeReady) {
+    initializeBridge();
+    notice(
+      "🔄 已重新載入 Bridge，請等待連線狀態更新。"
+    );
+    return;
+  }
+
+  busy(true,"🔌 正在測試 OpenAI 連線……");
   try {
-    busy(true,"🔌 測試 GAS Bridge……");
-
-    if(!S.bridgeReady) {
-      throw new Error(
-        "尚未收到 ready，請確認 GAS 網頁應用程式已部署"
-      );
-    }
-
-    const result=await ai("ping",{},30000);
-    busy(false);
+    const result=await ai("ping",{},45000);
     S.error="";
-    status(result.message||"連線成功");
-    notice("✅ "+(result.message||"連線成功"));
-  } catch(error) {
+    status("✅ "+(result.message||"AI 連線成功"));
+    notice("✅ "+(result.message||"AI 連線成功"));
+  } finally {
     busy(false);
-    fail("連線測試",error);
   }
 }
 
-/* ===== p5.js ===== */
+/* =========================================
+   p5.js 世界
+========================================= */
 
 function setup() {
-  const c=createCanvas(windowWidth,windowHeight);
-  c.parent("world");
+  const canvas=createCanvas(windowWidth,windowHeight);
+  canvas.parent("world");
   pixelDensity(1);
   imageMode(CENTER);
   rectMode(CENTER);
@@ -265,71 +325,72 @@ function windowResized() {
 }
 
 function initAmbient() {
-  S.ambient=Array.from({length:35},()=>({
+  S.ambient=Array.from({length:38},()=>({
     x:Math.random(),
     y:Math.random(),
-    phase:Math.random()*TWO_PI,
-    size:2+Math.random()*5
+    size:2+Math.random()*5,
+    phase:Math.random()*TWO_PI
   }));
-}
-
-function coverImage(img,x,y,w,h) {
-  if(!img?.width||!img?.height)return;
-  const s=Math.max(w/img.width,h/img.height);
-  image(img,x,y,img.width*s,img.height*s);
 }
 
 function containImage(img,x,y,w,h) {
   if(!img?.width||!img?.height)return;
-  const s=Math.min(w/img.width,h/img.height);
-  image(img,x,y,img.width*s,img.height*s);
+  const scale=Math.min(w/img.width,h/img.height);
+  image(img,x,y,img.width*scale,img.height*scale);
+}
+
+function coverImage(img,x,y,w,h) {
+  if(!img?.width||!img?.height)return;
+  const scale=Math.max(w/img.width,h/img.height);
+  image(img,x,y,img.width*scale,img.height*scale);
 }
 
 function draw() {
   const t=millis();
 
   if(S.worldImage) {
-    coverImage(S.worldImage,width/2,height/2,width,height);
+    coverImage(
+      S.worldImage,
+      width/2,height/2,width,height
+    );
   } else {
-    const g=drawingContext.createLinearGradient(0,0,0,height);
-    g.addColorStop(0,"#d9eef6");
-    g.addColorStop(.6,"#e8f5ec");
-    g.addColorStop(1,"#fff0d9");
-    drawingContext.fillStyle=g;
-    drawingContext.fillRect(0,0,width,height);
+    background("#e1f0f3");
+    noStroke();
+    fill("#d2e9dd");
+    rect(width/2,height*.92,width,height*.2);
+    fill("#f9e8cb");
+    circle(width*.82,height*.22,160);
   }
 
   drawAmbient(t);
   drawEnvironmentObjects(t);
   drawOriginalScene(t);
   drawHeroes(t);
-  drawArrival(t);
   drawParticles();
-  drawWorking(t);
 }
 
 function drawAmbient(t) {
   noStroke();
   for(const p of S.ambient) {
-    fill(255,255,255,35+sin(t*.001+p.phase)*25);
+    fill(255,255,255,75);
     circle(
-      p.x*width+sin(t*.0005+p.phase)*12,
-      p.y*height,p.size
+      p.x*width+sin(t*.0005+p.phase)*15,
+      p.y*height,
+      p.size
     );
   }
 }
 
 function drawEnvironmentObjects(t) {
   for(const obj of S.environmentObjects) {
-    if(!obj.image)continue;
-    push();
-    drawingContext.shadowColor="#536a7933";
-    drawingContext.shadowBlur=12;
     const size=obj.size*Math.min(width,height);
+    push();
+    drawingContext.shadowColor="#44556655";
+    drawingContext.shadowBlur=12;
     containImage(
       obj.image,
       obj.x*width,
-      obj.y*height+sin(t*.001+obj.phase)*2,
+      obj.y*height+sin(t*.001+obj.phase)*3,
       size,size
     );
     pop();
@@ -337,19 +398,15 @@ function drawEnvironmentObjects(t) {
 }
 
 function drawOriginalScene(t) {
-  const scene=S.originalScene;
-  if(!scene?.image)return;
-  push();
-  drawingContext.shadowColor="#40556644";
-  drawingContext.shadowBlur=20;
+  if(!S.originalScene?.image)return;
+
   containImage(
-    scene.image,
-    scene.x*width,
-    scene.y*height+sin(t*.001)*2,
-    Math.min(width*.52,520),
-    Math.min(height*.58,520)
+    S.originalScene.image,
+    width*.5,
+    height*.72+sin(t*.001)*3,
+    Math.min(width*.48,520),
+    Math.min(height*.56,520)
   );
-  pop();
 }
 
 function updateHero(hero,t) {
@@ -358,23 +415,29 @@ function updateHero(hero,t) {
 
   if(["walk","fly","swim","glide"].includes(move)) {
     hero.x+=hero.direction*hero.speed*dt;
+
     if(hero.x>.87) {
-      hero.x=.87;hero.direction=-1;
+      hero.x=.87;
+      hero.direction=-1;
     }
     if(hero.x<.13) {
-      hero.x=.13;hero.direction=1;
+      hero.x=.13;
+      hero.direction=1;
     }
   }
 
   if(move==="fly") {
-    hero.y=hero.baseY+sin(t*.0015+hero.phase)*.055;
+    hero.y=hero.baseY+
+      sin(t*.0015+hero.phase)*.055;
   } else if(move==="swim") {
-    hero.y=hero.baseY+sin(t*.0012+hero.phase)*.025;
+    hero.y=hero.baseY+
+      sin(t*.0012+hero.phase)*.025;
   } else if(move==="bounce") {
     hero.y=hero.baseY-
       abs(sin(t*.002+hero.phase))*.075;
-  } else if(move==="float") {
-    hero.y=hero.baseY+sin(t*.001+hero.phase)*.025;
+  } else if(move==="float"||move==="glide") {
+    hero.y=hero.baseY+
+      sin(t*.001+hero.phase)*.025;
   } else {
     hero.y=hero.baseY;
   }
@@ -382,6 +445,7 @@ function updateHero(hero,t) {
 
 function drawAccessory(part,baseSize) {
   if(!part.image)return;
+
   push();
   translate(
     part.position.x*baseSize,
@@ -389,8 +453,8 @@ function drawAccessory(part,baseSize) {
   );
 
   if(part.animate==="flap") {
-    const v=sin(millis()*.012)*.07;
-    scale(1+v,1-v);
+    const value=sin(millis()*.012)*.07;
+    scale(1+value,1-value);
   }
 
   const size=baseSize*part.scale;
@@ -400,100 +464,75 @@ function drawAccessory(part,baseSize) {
 
 function drawHeroes(t) {
   for(const hero of S.heroes) {
-    if(hero.entering)continue;
-
     updateHero(hero,t);
+
     const x=hero.x*width;
     const y=hero.y*height;
-
     const size=Math.min(
-      width*.35,height*.39,
+      width*.36,
+      height*.4,
       hero.size*(width/1100)
     )*hero.scale;
 
     push();
     translate(x,y);
+
     if(hero.direction<0)scale(-1,1);
 
     for(const part of hero.accessories) {
-      if(part.layer==="back")drawAccessory(part,size);
+      if(part.layer==="back") {
+        drawAccessory(part,size);
+      }
     }
 
-    // 原始積木圖層永遠獨立保留
-    drawingContext.shadowColor="#34495e44";
-    drawingContext.shadowBlur=16;
-    containImage(hero.original,0,0,size,size);
+    drawingContext.shadowColor="#35485c55";
+    drawingContext.shadowBlur=18;
+
+    // 永遠保留原始去背積木圖層
+    containImage(
+      hero.original,
+      0,0,size,size
+    );
 
     for(const part of hero.accessories) {
-      if(part.layer!=="back")drawAccessory(part,size);
+      if(part.layer!=="back") {
+        drawAccessory(part,size);
+      }
     }
 
     pop();
 
     if(hero.speech&&t<hero.speechUntil) {
-      speechBubble(hero.speech,x,y-size*.65);
+      drawSpeech(hero.speech,x,y-size*.65);
     }
   }
 }
 
-function speechBubble(message,x,y) {
-  const value=String(message).slice(0,32);
+function drawSpeech(message,x,y) {
+  const textValue=String(message).slice(0,32);
   push();
   textSize(15);
-  const w=clamp(textWidth(value)+36,130,350);
+  const w=clamp(textWidth(textValue)+35,130,360);
   const cx=clamp(x,w/2+10,width-w/2-10);
-  const cy=Math.max(112,y-15);
+  const cy=Math.max(105,y-15);
   noStroke();
   fill(255,255,255,235);
-  rect(cx,cy,w,47,16);
-  fill("#45576b");
-  text(value,cx,cy);
+  rect(cx,cy,w,48,15);
+  fill("#425166");
+  text(textValue,cx,cy);
   pop();
 }
 
-function arrival(img,size=320) {
-  return new Promise(resolve=>{
-    S.arrival={
-      image:img,
-      size:Math.min(size,width*.45,height*.5),
-      start:millis(),
-      resolve
-    };
-  });
-}
-
-function drawArrival(t) {
-  const a=S.arrival;
-  if(!a)return;
-  const p=clamp((t-a.start)/1500,0,1);
-  const eased=1-pow(1-p,3);
-  push();
-  tint(255,p*255);
-  const size=a.size*(.12+eased*.88);
-  containImage(
-    a.image,width/2,
-    height*(.35+eased*.3),
-    size,size
-  );
-  noTint();
-  pop();
-  if(p>=1) {
-    S.arrival=null;
-    burst(width/2,height*.65,45);
-    a.resolve();
-  }
-}
-
-function burst(x,y,count=25,c="#ffffff") {
+function burst(x,y,count=25,colorValue="#ffffff") {
   for(let i=0;i<count;i++) {
-    const a=Math.random()*TWO_PI;
+    const angle=Math.random()*TWO_PI;
     S.particles.push({
       x,y,
-      vx:cos(a)*(1+Math.random()*3),
-      vy:sin(a)*(1+Math.random()*3),
-      life:1200+Math.random()*900,
-      size:4+Math.random()*8,
-      color:c
+      vx:cos(angle)*(1+Math.random()*3),
+      vy:sin(angle)*(1+Math.random()*3),
+      life:1400+Math.random()*800,
+      color:colorValue,
+      size:3+Math.random()*7
     });
   }
   if(S.particles.length>400) {
@@ -515,84 +554,54 @@ function drawParticles() {
 
     push();
     const c=color(p.color);
-    c.setAlpha(220*clamp(p.life/2000,0,1));
-    fill(c);noStroke();
+    c.setAlpha(200*clamp(p.life/1800,0,1));
+    fill(c);
+    noStroke();
     rect(p.x,p.y,p.size*.4,p.size);
     rect(p.x,p.y,p.size,p.size*.4);
     pop();
   }
 }
 
-function drawWorking(t) {
-  if(!S.busy)return;
-  push();noStroke();
-  for(let i=0;i<9;i++) {
-    const a=t*.0013+i*TWO_PI/9;
-    fill(255,255,255,130);
-    circle(
-      width/2+cos(a)*52,
-      height*.27+sin(a)*30,7
-    );
-  }
-  pop();
-}
-
 function effect(name="sparkle") {
   const colors={
     snow:"#ffffff",
-    leaves:"#a7dfb5",
     bubbles:"#b5e9ff",
     fireflies:"#fff0a5",
     fireworks:"#ffc6d5",
+    leaves:"#a7dfb5",
     glow:"#d6c5ff",
     sparkle:"#ffffff"
   };
+
   const start=performance.now();
   const timer=setInterval(()=>{
-    if(performance.now()-start>3000) {
-      clearInterval(timer);return;
+    if(performance.now()-start>2500) {
+      clearInterval(timer);
+      return;
     }
+
     burst(
       Math.random()*width,
       Math.random()*height*.8,
-      5,colors[name]||"#ffffff"
+      5,
+      colors[name]||"#ffffff"
     );
-  },140);
+  },150);
 }
 
-/* ===== 圖片 ===== */
+/* =========================================
+   圖片工具
+========================================= */
 
-function loadPicture(dataUrl) {
+function loadPicture(src) {
   return new Promise((resolve,reject)=>{
-    if(typeof dataUrl!=="string"||
-       !dataUrl.startsWith("data:image/")) {
-      reject(new Error("AI 沒有回傳有效圖片"));
-      return;
-    }
-    loadImage(
-      dataUrl,resolve,
-      ()=>reject(new Error("圖片載入失敗"))
+    const image=new Image();
+    image.onload=()=>resolve(image);
+    image.onerror=()=>reject(
+      new Error("圖片載入失敗")
     );
-  });
-}
-
-function resizePhoto(dataUrl) {
-  return new Promise((resolve,reject)=>{
-    const img=new Image();
-    img.onload=()=>{
-      const ratio=Math.min(
-        1,1100/Math.max(img.width,img.height)
-      );
-      const c=document.createElement("canvas");
-      c.width=Math.round(img.width*ratio);
-      c.height=Math.round(img.height*ratio);
-      c.getContext("2d").drawImage(
-        img,0,0,c.width,c.height
-      );
-      resolve(c.toDataURL("image/jpeg",.82));
-    };
-    img.onerror=()=>reject(new Error("照片處理失敗"));
-    img.src=dataUrl;
+    image.src=src;
   });
 }
 
@@ -601,45 +610,484 @@ function fileData(file) {
     const reader=new FileReader();
     reader.onload=()=>resolve(reader.result);
     reader.onerror=()=>reject(
-      new Error("無法讀取照片")
+      new Error("照片讀取失敗")
     );
     reader.readAsDataURL(file);
   });
 }
 
-/* ===== 角色與場景 ===== */
+async function scaledData(
+  src,max=700,format="image/png"
+) {
+  const image=await loadPicture(src);
+  const ratio=Math.min(
+    1,max/Math.max(image.width,image.height)
+  );
+
+  const canvas=document.createElement("canvas");
+  canvas.width=Math.max(
+    1,Math.round(image.width*ratio)
+  );
+  canvas.height=Math.max(
+    1,Math.round(image.height*ratio)
+  );
+
+  canvas.getContext("2d").drawImage(
+    image,0,0,canvas.width,canvas.height
+  );
+
+  return canvas.toDataURL(
+    format,
+    format==="image/jpeg"?.85:undefined
+  );
+}
+
+function cropTransparent(canvas) {
+  const ctx=canvas.getContext("2d");
+  const {width:w,height:h}=canvas;
+  const pixels=ctx.getImageData(0,0,w,h).data;
+
+  let left=w,top=h,right=-1,bottom=-1;
+
+  for(let y=0;y<h;y++) {
+    for(let x=0;x<w;x++) {
+      if(pixels[(y*w+x)*4+3]>10) {
+        left=Math.min(left,x);
+        right=Math.max(right,x);
+        top=Math.min(top,y);
+        bottom=Math.max(bottom,y);
+      }
+    }
+  }
+
+  if(right<left) {
+    throw new Error("圖片已完全透明");
+  }
+
+  left=Math.max(0,left-5);
+  top=Math.max(0,top-5);
+  right=Math.min(w-1,right+5);
+  bottom=Math.min(h-1,bottom+5);
+
+  const out=document.createElement("canvas");
+  out.width=right-left+1;
+  out.height=bottom-top+1;
+  out.getContext("2d").drawImage(
+    canvas,
+    left,top,out.width,out.height,
+    0,0,out.width,out.height
+  );
+  return out.toDataURL("image/png");
+}
+
+/* =========================================
+   相機
+========================================= */
+
+async function openCamera() {
+  $("cameraModal").classList.add("open");
+
+  try {
+    if(!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("瀏覽器未提供相機權限");
+    }
+
+    S.cameraStream=
+      await navigator.mediaDevices.getUserMedia({
+        video:{
+          facingMode:{ideal:"environment"}
+        },
+        audio:false
+      });
+
+    $("video").srcObject=S.cameraStream;
+    await $("video").play();
+  } catch(error) {
+    notice(
+      "無法啟動相機，可改用「選擇照片」：" +
+      error.message
+    );
+  }
+}
+
+function closeCamera() {
+  $("cameraModal").classList.remove("open");
+
+  if(S.cameraStream) {
+    S.cameraStream.getTracks()
+      .forEach(track=>track.stop());
+    S.cameraStream=null;
+  }
+
+  $("video").srcObject=null;
+}
+
+async function capture() {
+  const video=$("video");
+
+  if(!video.videoWidth) {
+    notice("相機尚未準備完成");
+    return;
+  }
+
+  const canvas=document.createElement("canvas");
+  canvas.width=video.videoWidth;
+  canvas.height=video.videoHeight;
+  canvas.getContext("2d").drawImage(
+    video,0,0,canvas.width,canvas.height
+  );
+
+  const src=canvas.toDataURL("image/jpeg",.88);
+  closeCamera();
+  await openEditor(src);
+}
+
+/* =========================================
+   去背編輯器
+========================================= */
+
+async function openEditor(src) {
+  const image=await loadPicture(src);
+  const canvas=$("editCanvas");
+  const ratio=Math.min(
+    1,850/Math.max(image.width,image.height)
+  );
+
+  canvas.width=Math.max(
+    1,Math.round(image.width*ratio)
+  );
+  canvas.height=Math.max(
+    1,Math.round(image.height*ratio)
+  );
+
+  const ctx=canvas.getContext("2d",{
+    willReadFrequently:true
+  });
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(
+    image,0,0,canvas.width,canvas.height
+  );
+
+  S.editorOriginal=ctx.getImageData(
+    0,0,canvas.width,canvas.height
+  );
+  S.editorHistory=[];
+  S.editorMode="erase";
+  S.editorPainting=false;
+  S.editorPrevious=null;
+
+  $("editorModal").classList.add("open");
+}
+
+function editorHistory() {
+  const canvas=$("editCanvas");
+  const ctx=canvas.getContext("2d");
+
+  S.editorHistory.push(
+    ctx.getImageData(
+      0,0,canvas.width,canvas.height
+    )
+  );
+
+  if(S.editorHistory.length>8) {
+    S.editorHistory.shift();
+  }
+}
+
+function undoEditor() {
+  const previous=S.editorHistory.pop();
+  if(!previous)return;
+  $("editCanvas")
+    .getContext("2d")
+    .putImageData(previous,0,0);
+}
+
+function resetEditor() {
+  if(!S.editorOriginal)return;
+  editorHistory();
+  $("editCanvas")
+    .getContext("2d")
+    .putImageData(S.editorOriginal,0,0);
+}
+
+function quickRemoveBg() {
+  const canvas=$("editCanvas");
+  const ctx=canvas.getContext("2d",{
+    willReadFrequently:true
+  });
+  const w=canvas.width;
+  const h=canvas.height;
+  const image=ctx.getImageData(0,0,w,h);
+  const data=image.data;
+
+  const bg=[0,0,0];
+  const corners=[
+    [0,0],[w-1,0],[0,h-1],[w-1,h-1]
+  ];
+
+  for(const [x,y] of corners) {
+    const i=(y*w+x)*4;
+    for(let c=0;c<3;c++) {
+      bg[c]+=data[i+c]/4;
+    }
+  }
+
+  const seen=new Uint8Array(w*h);
+  const queue=new Int32Array(w*h);
+  let head=0,tail=0;
+
+  function enqueue(x,y) {
+    if(x<0||y<0||x>=w||y>=h)return;
+    const key=y*w+x;
+    if(seen[key])return;
+
+    const i=key*4;
+    const difference=
+      (data[i]-bg[0])**2+
+      (data[i+1]-bg[1])**2+
+      (data[i+2]-bg[2])**2;
+
+    if(difference>4900)return;
+    seen[key]=1;
+    queue[tail++]=key;
+  }
+
+  editorHistory();
+
+  for(let x=0;x<w;x++) {
+    enqueue(x,0);
+    enqueue(x,h-1);
+  }
+
+  for(let y=0;y<h;y++) {
+    enqueue(0,y);
+    enqueue(w-1,y);
+  }
+
+  while(head<tail) {
+    const key=queue[head++];
+    const x=key%w;
+    const y=Math.floor(key/w);
+
+    data[key*4+3]=0;
+
+    enqueue(x-1,y);
+    enqueue(x+1,y);
+    enqueue(x,y-1);
+    enqueue(x,y+1);
+  }
+
+  ctx.putImageData(image,0,0);
+  status("快速去背完成，可用筆刷修整");
+}
+
+async function aiRemoveBg() {
+  const button=$("removeBgAI");
+  button.disabled=true;
+
+  try {
+    status("AI 正在移除照片背景……");
+
+    const canvas=$("editCanvas");
+    const input=await scaledData(
+      canvas.toDataURL("image/png"),
+      650
+    );
+
+    const result=await ai(
+      "removeBackgroundAI",
+      {image:input},
+      180000
+    );
+
+    const image=await loadPicture(result.image);
+
+    editorHistory();
+
+    const ctx=canvas.getContext("2d");
+    ctx.clearRect(
+      0,0,canvas.width,canvas.height
+    );
+    ctx.drawImage(
+      image,0,0,canvas.width,canvas.height
+    );
+
+    status("AI 去背完成，可手動修整");
+    notice("✨ AI 去背完成");
+  } finally {
+    button.disabled=false;
+  }
+}
+
+function editorPoint(event) {
+  const canvas=$("editCanvas");
+  const rect=canvas.getBoundingClientRect();
+
+  return {
+    x:(event.clientX-rect.left)*
+      canvas.width/rect.width,
+    y:(event.clientY-rect.top)*
+      canvas.height/rect.height
+  };
+}
+
+function paintEditor(event) {
+  if(!S.editorPainting)return;
+
+  event.preventDefault();
+
+  const canvas=$("editCanvas");
+  const ctx=canvas.getContext("2d",{
+    willReadFrequently:true
+  });
+
+  const image=ctx.getImageData(
+    0,0,canvas.width,canvas.height
+  );
+  const data=image.data;
+  const original=S.editorOriginal.data;
+
+  const point=editorPoint(event);
+  const previous=S.editorPrevious||point;
+  const radius=Number($("brushSize").value)/2;
+
+  const distance=Math.hypot(
+    point.x-previous.x,
+    point.y-previous.y
+  );
+
+  const steps=Math.max(
+    1,Math.ceil(distance/Math.max(1,radius/2))
+  );
+
+  for(let step=0;step<=steps;step++) {
+    const x=previous.x+
+      (point.x-previous.x)*step/steps;
+    const y=previous.y+
+      (point.y-previous.y)*step/steps;
+
+    const minX=Math.max(0,Math.floor(x-radius));
+    const maxX=Math.min(
+      canvas.width-1,Math.ceil(x+radius)
+    );
+    const minY=Math.max(0,Math.floor(y-radius));
+    const maxY=Math.min(
+      canvas.height-1,Math.ceil(y+radius)
+    );
+
+    for(let yy=minY;yy<=maxY;yy++) {
+      for(let xx=minX;xx<=maxX;xx++) {
+        if((xx-x)**2+(yy-y)**2>radius**2) {
+          continue;
+        }
+
+        const i=(yy*canvas.width+xx)*4;
+
+        if(S.editorMode==="erase") {
+          data[i+3]=0;
+        } else {
+          for(let c=0;c<4;c++) {
+            data[i+c]=original[i+c];
+          }
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(image,0,0);
+  S.editorPrevious=point;
+}
+
+function initEditorPointer() {
+  const canvas=$("editCanvas");
+
+  canvas.addEventListener("pointerdown",event=>{
+    if(!S.editorOriginal)return;
+    S.editorPainting=true;
+    S.editorPrevious=null;
+    editorHistory();
+    canvas.setPointerCapture(event.pointerId);
+    paintEditor(event);
+  });
+
+  canvas.addEventListener("pointermove",paintEditor);
+
+  const finish=()=>{
+    S.editorPainting=false;
+    S.editorPrevious=null;
+  };
+
+  canvas.addEventListener("pointerup",finish);
+  canvas.addEventListener("pointercancel",finish);
+}
+
+/* =========================================
+   角色與世界
+========================================= */
 
 function accessoryPlacement(value) {
   const presets={
-    back:{position:{x:0,y:-.04},scale:1.3,layer:"back"},
-    head:{position:{x:0,y:-.48},scale:.48,layer:"front"},
-    top:{position:{x:0,y:-.52},scale:.52,layer:"front"},
-    left:{position:{x:-.43,y:0},scale:.65,layer:"front"},
-    right:{position:{x:.43,y:0},scale:.65,layer:"front"},
-    front:{position:{x:0,y:.08},scale:.65,layer:"front"},
-    tail:{position:{x:.45,y:.25},scale:.68,layer:"back"},
-    bottom:{position:{x:0,y:.48},scale:.55,layer:"front"},
-    center:{position:{x:0,y:0},scale:.7,layer:"front"}
+    back:{
+      position:{x:0,y:-.04},
+      scale:1.3,layer:"back"
+    },
+    head:{
+      position:{x:0,y:-.48},
+      scale:.48,layer:"front"
+    },
+    top:{
+      position:{x:0,y:-.52},
+      scale:.52,layer:"front"
+    },
+    left:{
+      position:{x:-.43,y:0},
+      scale:.65,layer:"front"
+    },
+    right:{
+      position:{x:.43,y:0},
+      scale:.65,layer:"front"
+    },
+    front:{
+      position:{x:0,y:.08},
+      scale:.65,layer:"front"
+    },
+    tail:{
+      position:{x:.45,y:.25},
+      scale:.68,layer:"back"
+    },
+    bottom:{
+      position:{x:0,y:.48},
+      scale:.55,layer:"front"
+    },
+    center:{
+      position:{x:0,y:0},
+      scale:.7,layer:"front"
+    }
   };
   return presets[value]||presets.front;
 }
 
 function selectedHero() {
-  return S.heroes.find(h=>h.id===S.selectedId)||
-    S.heroes[S.heroes.length-1]||null;
+  return S.heroes.find(
+    h=>h.id===S.selectedId
+  )||S.heroes[S.heroes.length-1]||null;
 }
 
 function findHero(name) {
-  if(!name)return selectedHero();
+  const value=String(name||"").trim();
+  if(!value)return selectedHero();
+
   return S.heroes.find(h=>
-    h.name===name||
-    h.name.includes(name)||
-    name.includes(h.name)
+    h.name===value||
+    h.name.includes(value)||
+    value.includes(h.name)
   )||selectedHero();
 }
 
 function updateHeroList() {
   const host=$("heroList");
+  if(!host)return;
   host.replaceChildren();
 
   if(!S.heroes.length) {
@@ -651,39 +1099,47 @@ function updateHeroList() {
     const button=document.createElement("button");
     button.className="heroBtn"+
       (hero.id===S.selectedId?" active":"");
+
     button.textContent=
       "🧩 "+hero.name+
-      "｜新增造型 "+hero.accessories.length+" 個";
-    button.onclick=()=>{
+      "｜配件 "+hero.accessories.length+" 個";
+
+    button.addEventListener("click",()=>{
       S.selectedId=hero.id;
       updateHeroList();
       notice("已選擇「"+hero.name+"」");
-    };
+    });
+
     host.appendChild(button);
   }
 }
 
-async function setWorld(dataUrl,name) {
-  S.worldImage=await loadPicture(dataUrl);
+async function setWorld(src,name) {
+  S.worldImage=await loadPicture(src);
   S.worldName=name||"我的想像世界";
   $("worldTitle").textContent="✨ "+S.worldName;
-  status("世界背景已顯示");
+  status("世界背景已更新");
 }
 
-async function createHero(original,originalData,info) {
+function newHero(img,data,info) {
+  const count=S.heroes.length;
+
   const hero={
     id:uid(),
-    name:info.name||"我的角色",
+    name:info.name||"積木朋友"+(count+1),
     description:info.description||"",
-    original,
-    originalData,
+    original:img,
+    originalData:data,
     accessories:[],
-    x:.5,y:.67,baseY:.67,
-    size:300,scale:1,direction:1,
+    x:.28+(count%3)*.22,
+    y:.67,
+    baseY:.67,
+    size:300,
+    scale:1,
+    direction:1,
     speed:.00007,
     movement:info.movement||"float",
     phase:Math.random()*TWO_PI,
-    entering:false,
     speech:"",
     speechUntil:0
   };
@@ -691,181 +1147,155 @@ async function createHero(original,originalData,info) {
   S.heroes.push(hero);
   S.selectedId=hero.id;
   updateHeroList();
+  burst(hero.x*width,hero.y*height,55);
 
-  if(!S.worldImage) {
-    try {
-      busy(true,"🏞️ 正在生成 Plus-Plus 世界……");
-      const result=await ai(
-        "generateWorld",{info},180000
-      );
-      await setWorld(result.image,info.worldName);
-      S.worldPrompt=info.worldPrompt||"";
-    } catch(error) {
-      S.error="背景生成："+error.message;
-      status("角色已加入，背景生成失敗");
-      notice("⚠️ "+S.error);
-    }
-  }
-
-  effect(info.effect||"sparkle");
-  speak(
-    info.greeting||
-    "你好！你想為我增加什麼造型呢？",
-    hero
-  );
+  return hero;
 }
 
-async function createEnvironment(original,photo,info) {
-  S.originalScene={
-    image:original,
-    sourcePhoto:photo,
-    x:.5,y:.69
-  };
-
-  try {
-    busy(true,"🏰 正在延伸積木世界……");
-    const result=await ai(
-      "generateEnvironmentLayer",
-      {image:photo,info},180000
-    );
-    await setWorld(
-      result.image,info.worldName||info.name
-    );
-    S.worldPrompt=info.worldPrompt||"";
-  } catch(error) {
-    S.error="場景延伸："+error.message;
-    status("原始場景已加入，延伸失敗");
-    notice("⚠️ "+S.error);
-  }
-
-  effect(info.effect||"sparkle");
-  speak(
-    info.greeting||
-    "你的世界展開了！還想增加什麼呢？"
-  );
-}
-
-async function processCreation(rawPhoto) {
+async function saveCreation() {
   if(S.busy)return;
-  S.error="";
+
+  let imageData;
 
   try {
-    busy(true,"📷 正在準備你的積木照片……");
-    confirmSound();
+    imageData=cropTransparent($("editCanvas"));
+    $("editorModal").classList.remove("open");
+    S.error="";
 
-    const photo=await resizePhoto(rawPhoto);
-    S.lastPhoto=photo;
+    busy(true,"🧠 正在辨識你的積木作品……");
 
-    status("第一階段：AI 去背");
-    busy(true,"✨ 正在移除背景……");
-
-    const cutout=await ai(
-      "removeBackgroundAI",
-      {image:photo},180000
+    const source=await scaledData(
+      imageData,650
     );
 
-    const original=await loadPicture(cutout.image);
-
-    busy(true,"🌈 你的作品正在進入世界……");
-    await arrival(original,340);
-
-    status("第二階段：AI 辨識");
-    busy(true,"🧠 正在理解你的作品……");
+    S.lastPhoto=source;
 
     const info=await ai(
       "analyzeCreation",
-      {image:photo},120000
+      {image:source},
+      120000
     );
 
     S.lastInfo=info;
+    const img=await loadPicture(imageData);
 
     if(info.kind==="environment") {
-      await createEnvironment(original,photo,info);
+      S.originalScene={
+        image:img,
+        sourcePhoto:source
+      };
+
+      busy(true,"🏞️ 正在延伸積木世界……");
+
+      try {
+        const result=await ai(
+          "generateEnvironmentLayer",
+          {image:source,info},
+          180000
+        );
+
+        await setWorld(
+          result.image,
+          info.worldName||info.name
+        );
+      } catch(error) {
+        notice(
+          "原始場景已保留，但 AI 背景生成失敗："+error.message
+        );
+      }
     } else {
-      await createHero(original,cutout.image,info);
+      const hero=newHero(img,imageData,info);
+
+      if(!S.worldImage) {
+        busy(true,"🌈 正在生成積木世界……");
+
+        try {
+          const result=await ai(
+            "generateWorld",
+            {info},
+            180000
+          );
+
+          await setWorld(
+            result.image,info.worldName
+          );
+        } catch(error) {
+          notice(
+            "角色已加入，但背景生成失敗："+error.message
+          );
+        }
+      }
+
+      speak(
+        info.greeting||
+        "你好！你想為我增加什麼呢？",
+        hero
+      );
     }
 
     busy(false);
-    status("作品已加入，可以語音互動");
-    notice("✨ "+info.name+" 已進入世界！");
-
-    setTimeout(()=>{
-      if(!S.busy)hideNotice();
-    },5000);
+    status("積木作品已加入世界");
+    notice("✨ "+info.name+" 已加入世界！");
   } catch(error) {
     busy(false);
-    fail("拍照創作",error);
+
+    // 如果 AI 無法連線，保留作品並提供離線加入
+    if(imageData&&!S.bridgeReady) {
+      try {
+        const img=await loadPicture(imageData);
+        newHero(img,imageData,{
+          name:"積木朋友"+(S.heroes.length+1),
+          description:"手作 Plus-Plus 積木作品"
+        });
+        notice(
+          "AI 尚未連線，作品已先加入世界。"
+        );
+        status("離線加入角色成功");
+        return;
+      } catch(ignored) {}
+    }
+
+    fail("作品加入",error);
   }
 }
 
-/* ===== 相機 ===== */
-
-async function openCamera() {
-  $("cameraModal").classList.add("open");
-  try {
-    S.cameraStream=
-      await navigator.mediaDevices.getUserMedia({
-        video:{facingMode:{ideal:"environment"}},
-        audio:false
-      });
-    $("video").srcObject=S.cameraStream;
-    await $("video").play();
-  } catch(error) {
-    notice("無法開啟相機，請改用選擇照片");
-  }
-}
-
-function closeCamera() {
-  $("cameraModal").classList.remove("open");
-  if(S.cameraStream) {
-    S.cameraStream.getTracks().forEach(t=>t.stop());
-    S.cameraStream=null;
-  }
-  $("video").srcObject=null;
-}
-
-async function capture() {
-  const video=$("video");
-  if(!video.videoWidth) {
-    notice("相機尚未準備好");return;
-  }
-  const c=document.createElement("canvas");
-  c.width=video.videoWidth;
-  c.height=video.videoHeight;
-  c.getContext("2d").drawImage(
-    video,0,0,c.width,c.height
-  );
-  const photo=c.toDataURL("image/jpeg",.85);
-  closeCamera();
-  await processCreation(photo);
-}
-
-/* ===== 聲音與語音 ===== */
+/* =========================================
+   語音與聲音
+========================================= */
 
 function confirmSound() {
   if(!S.soundOn)return;
+
   try {
     const AudioClass=
-      window.AudioContext||window.webkitAudioContext;
+      window.AudioContext||
+      window.webkitAudioContext;
+
     if(!AudioClass)return;
 
     S.audioContext||=new AudioClass();
     const ctx=S.audioContext;
     ctx.resume();
+
     const now=ctx.currentTime;
 
-    [523,659,784].forEach((f,i)=>{
+    [523,659,784].forEach((frequency,i)=>{
       const osc=ctx.createOscillator();
       const gain=ctx.createGain();
+
       osc.type="sine";
-      osc.frequency.value=f;
-      gain.gain.setValueAtTime(.0001,now+i*.11);
+      osc.frequency.value=frequency;
+
+      gain.gain.setValueAtTime(
+        .0001,now+i*.11
+      );
       gain.gain.exponentialRampToValueAtTime(
         .07,now+i*.11+.02
       );
       gain.gain.exponentialRampToValueAtTime(
         .0001,now+i*.11+.24
       );
+
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now+i*.11);
@@ -889,15 +1319,20 @@ function speak(message,hero=null) {
   if(!S.soundOn||!window.speechSynthesis)return;
 
   speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(value);
-  u.lang="zh-TW";
-  u.rate=.9;
+
+  const utterance=
+    new SpeechSynthesisUtterance(value);
+
+  utterance.lang="zh-TW";
+  utterance.rate=.9;
 
   const voices=speechSynthesis.getVoices();
-  u.voice=voices.find(v=>v.lang==="zh-TW")||
-    voices.find(v=>v.lang.startsWith("zh"))||null;
+  utterance.voice=
+    voices.find(v=>v.lang==="zh-TW")||
+    voices.find(v=>v.lang.startsWith("zh"))||
+    null;
 
-  speechSynthesis.speak(u);
+  speechSynthesis.speak(utterance);
 }
 
 function initSpeech() {
@@ -906,48 +1341,65 @@ function initSpeech() {
     window.webkitSpeechRecognition;
 
   if(!Recognition) {
-    status("瀏覽器不支援語音辨識");
+    console.warn(
+      "瀏覽器不支援 Web Speech Recognition"
+    );
     return;
   }
 
-  const r=new Recognition();
-  r.lang="zh-TW";
-  r.continuous=false;
-  r.interimResults=false;
+  const recognition=new Recognition();
+  recognition.lang="zh-TW";
+  recognition.continuous=false;
+  recognition.interimResults=false;
 
-  r.onstart=()=>{
+  recognition.onstart=()=>{
     S.listening=true;
     $("mic").classList.add("listening");
-    notice("🎤 正在聽你說話……");
+    notice("🎤 正在聆聽……");
   };
 
-  r.onend=()=>{
+  recognition.onend=()=>{
     S.listening=false;
     $("mic").classList.remove("listening");
   };
 
-  r.onerror=e=>{
-    notice("⚠️ 語音辨識："+e.error);
+  recognition.onerror=event=>{
+    S.listening=false;
+    $("mic").classList.remove("listening");
+    notice(
+      "⚠️ 語音辨識失敗："+event.error
+    );
   };
 
-  r.onresult=async e=>{
-    const message=e.results[0][0].transcript;
-    notice("你說：「"+message+"」");
-    await voiceCommand(message);
+  recognition.onresult=async event=>{
+    const textValue=
+      event.results[0][0].transcript;
+
+    $("chatInput").value=textValue;
+    notice("你說：「"+textValue+"」");
+
+    await voiceCommand(textValue);
   };
 
-  S.recognition=r;
+  S.recognition=recognition;
 }
 
 function toggleMic() {
   if(!S.recognition) {
-    notice("建議使用支援語音辨識的 Chrome");
+    notice(
+      "此瀏覽器不支援語音辨識，" +
+      "可改用工作台輸入文字。"
+    );
     return;
   }
+
   if(S.listening) {
-    S.recognition.stop();return;
+    S.recognition.stop();
+    return;
   }
+
   window.speechSynthesis?.cancel();
+
   try {
     S.recognition.start();
   } catch(error) {
@@ -957,73 +1409,91 @@ function toggleMic() {
 
 async function voiceCommand(message) {
   if(S.busy)return;
+  if(!String(message||"").trim())return;
+
+  busy(true,"🧠 AI 正在理解你的想像……");
 
   try {
-    busy(true,"💬 AI 正在理解你的想像……");
-
     const context={
       worldName:S.worldName,
       worldPrompt:S.worldPrompt,
       hasOriginalScene:!!S.originalScene,
       selectedHero:selectedHero()?.name||"",
-      heroes:S.heroes.map(h=>({
-        name:h.name,
-        description:h.description,
-        movement:h.movement,
-        accessories:h.accessories.map(a=>a.name)
+      heroes:S.heroes.map(hero=>({
+        name:hero.name,
+        description:hero.description,
+        movement:hero.movement,
+        accessories:hero.accessories.map(
+          part=>part.name
+        )
       })),
       environmentObjects:
-        S.environmentObjects.map(o=>o.name)
+        S.environmentObjects.map(
+          object=>object.name
+        )
     };
 
     const decision=await ai(
       "directWorld",
-      {message,context},120000
+      {message,context},
+      120000
     );
+
+    if(!window.PPDirector?.execute) {
+      throw new Error(
+        "ai-director.js 尚未載入"
+      );
+    }
 
     await PPDirector.execute(decision);
 
     busy(false);
     status("語音互動完成");
-    notice("✨ "+(decision.reply||"創作完成"));
-
-    setTimeout(()=>{
-      if(!S.busy)hideNotice();
-    },5000);
+    notice(
+      "✨ "+(decision.reply||"想像已加入世界")
+    );
   } catch(error) {
     busy(false);
     fail("語音互動",error);
   }
 }
 
-/* ===== 其他操作 ===== */
+/* =========================================
+   世界操作
+========================================= */
 
 async function retryWorld() {
   if(!S.lastInfo) {
-    notice("請先拍攝積木作品");
+    notice("請先拍攝或上傳積木作品");
     return;
   }
 
+  busy(true,"🌈 正在重新生成背景……");
+
   try {
-    busy(true,"🌈 正在重新生成背景……");
-    const scene=S.lastInfo.kind==="environment";
+    const scene=
+      S.lastInfo.kind==="environment";
 
     const result=await ai(
-      scene?"generateEnvironmentLayer":"generateWorld",
-      {image:S.lastPhoto,info:S.lastInfo},
+      scene?
+        "generateEnvironmentLayer":
+        "generateWorld",
+      {
+        image:S.lastPhoto,
+        info:S.lastInfo
+      },
       180000
     );
 
     await setWorld(
-      result.image,S.lastInfo.worldName
+      result.image,
+      S.lastInfo.worldName
     );
 
-    busy(false);
     effect("sparkle");
     notice("✨ 背景已更新");
-  } catch(error) {
+  } finally {
     busy(false);
-    fail("背景生成",error);
   }
 }
 
@@ -1037,81 +1507,167 @@ function clearWorld() {
   S.environmentObjects=[];
   S.lastPhoto=null;
   S.lastInfo=null;
-  S.arrival=null;
   S.particles=[];
   S.error="";
-  $("worldTitle").textContent="Plus-Plus｜想像有形";
+
+  $("worldTitle").textContent=
+    "🧩 Plus-Plus｜想像有形";
+
   updateHeroList();
   status("世界已清空");
   notice("🌱 新世界準備好了！");
 }
 
+/* =========================================
+   UI 初始化
+========================================= */
+
 function initUI() {
-  $("begin").onclick=()=>{
+  // 各按鈕獨立綁定，不會因單一元素缺失中斷
+  bind("begin",()=>{
     $("intro").style.display="none";
     confirmSound();
-    notice("歡迎！先拍攝一件積木作品吧。");
-    speak("歡迎來到想像世界！拍下你拼好的積木吧。");
-  };
+    notice("歡迎！先拍攝你的積木作品吧。");
+    speak("歡迎來到想像世界！");
+  });
 
-  $("photo").onclick=openCamera;
-  $("capture").onclick=capture;
-  $("closeCamera").onclick=closeCamera;
-  $("upload").onclick=()=>$("file").click();
-  $("cameraUpload").onclick=()=>$("file").click();
+  bind("photo",openCamera);
+  bind("capture",capture);
+  bind("closeCamera",closeCamera);
 
-  $("file").onchange=async e=>{
-    const file=e.target.files?.[0];
-    if(!file)return;
-    try {
-      const photo=await fileData(file);
-      closeCamera();
-      await processCreation(photo);
-    } catch(error) {
-      fail("照片讀取",error);
+  bind("upload",()=>{
+    $("file").click();
+  });
+
+  bind("cameraUpload",()=>{
+    $("file").click();
+  });
+
+  $("file")?.addEventListener(
+    "change",async event=>{
+      const file=event.target.files?.[0];
+      if(!file)return;
+
+      try {
+        const data=await fileData(file);
+        closeCamera();
+        await openEditor(data);
+      } catch(error) {
+        fail("照片上傳",error);
+      }
+
+      event.target.value="";
     }
-    e.target.value="";
-  };
+  );
 
-  $("mic").onclick=toggleMic;
+  bind("removeBgAI",async()=>{
+    await aiRemoveBg();
+  });
 
-  $("sound").onclick=()=>{
+  bind("quickBg",quickRemoveBg);
+
+  bind("eraseMode",()=>{
+    S.editorMode="erase";
+    status("筆刷模式：擦除");
+  });
+
+  bind("restoreMode",()=>{
+    S.editorMode="restore";
+    status("筆刷模式：還原");
+  });
+
+  bind("undoEdit",undoEditor);
+  bind("resetEdit",resetEditor);
+  bind("saveCreation",saveCreation);
+
+  bind("cancelEditor",()=>{
+    $("editorModal").classList.remove("open");
+  });
+
+  bind("mic",toggleMic);
+
+  bind("sendText",async()=>{
+    const message=$("chatInput").value.trim();
+    if(!message)return;
+    await voiceCommand(message);
+  });
+
+  bind("sound",()=>{
     S.soundOn=!S.soundOn;
-    $("sound").textContent=S.soundOn?"🔊":"🔇";
-    if(!S.soundOn)window.speechSynthesis?.cancel();
-    notice(S.soundOn?"已開啟聲音":"已關閉聲音");
-  };
+    $("sound").textContent=
+      S.soundOn?"🔊":"🔇";
 
-  const togglePanel=()=>{
+    if(!S.soundOn) {
+      window.speechSynthesis?.cancel();
+    }
+
+    notice(
+      S.soundOn?"聲音已開啟":"聲音已關閉"
+    );
+  });
+
+  bind("more",()=>{
     $("panel").classList.toggle("open");
-  };
+  });
 
-  $("more").onclick=togglePanel;
-  $("panelToggle").onclick=togglePanel;
+  bind("panelToggle",()=>{
+    $("panel").classList.toggle("open");
+  });
 
-  $("fullscreen").onclick=async()=>{
+  bind("fullscreen",async()=>{
     try {
       if(document.fullscreenElement) {
         await document.exitFullscreen();
       } else {
-        await document.documentElement.requestFullscreen();
+        await document.documentElement
+          .requestFullscreen();
       }
     } catch(error) {
-      notice("無法進入全螢幕");
+      notice(
+        "無法切換全螢幕："+error.message
+      );
     }
-  };
+  });
 
-  $("test").onclick=testConnection;
-  $("retry").onclick=retryWorld;
-  $("clear").onclick=()=>{
-    if(confirm("確定清空目前世界嗎？"))clearWorld();
-  };
+  document.addEventListener(
+    "fullscreenchange",()=>{
+      $("fullscreen").textContent=
+        document.fullscreenElement?
+        "⛶ 退出全螢幕":"⛶ 全螢幕";
+    }
+  );
+
+  bind("test",testConnection);
+  bind("reconnect",initializeBridge);
+  bind("retry",retryWorld);
+
+  bind("clear",()=>{
+    if(confirm("確定清空目前世界嗎？")) {
+      clearWorld();
+    }
+  });
+
+  initEditorPointer();
 }
 
-window.addEventListener("DOMContentLoaded",()=>{
+function initializePlusPlus() {
   initUI();
   initSpeech();
+
+  window.addEventListener(
+    "message",onBridgeMessage
+  );
+
   initializeBridge();
   updateHeroList();
-  status("等待開始創作");
-});
+}
+
+if(document.readyState==="loading") {
+  document.addEventListener(
+    "DOMContentLoaded",
+    initializePlusPlus,
+    {once:true}
+  );
+} else {
+  initializePlusPlus();
+}
