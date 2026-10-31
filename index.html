@@ -4,359 +4,1141 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport"
-        content="width=device-width,initial-scale=1">
-  <title>Plus-Plus｜想像有形</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.11/p5.min.js"></script>
+        content="width=device-width,initial-scale=1,viewport-fit=cover">
+
+  <title>Mindspace｜Plus-Plus 想像世界</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js"></script>
+
   <style>
-    * { box-sizing:border-box; }
+    * {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --purple: #e9e0f6;
+      --ink: #44394f;
+      --pink: #ffe0ec;
+      --blue: #dcefff;
+      --mint: #dff7e7;
+      --yellow: #fff0c8;
+      --panel: rgba(255,255,255,.95);
+    }
+
+    html,
     body {
-      margin:0;
-      font-family:"Noto Sans TC",system-ui,sans-serif;
-      color:#344354;
-      background:#eaf5f5;
-      overflow:hidden;
+      width: 100%;
+      height: 100%;
+      margin: 0;
     }
-    button,input,textarea { font:inherit; }
+
+    body {
+      font-family:
+        "Noto Sans TC",
+        "Microsoft JhengHei",
+        sans-serif;
+
+      background: var(--purple);
+      color: var(--ink);
+      overflow: hidden;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
     button {
-      border:0;
-      border-radius:14px;
-      padding:11px 15px;
-      cursor:pointer;
-      background:#fff;
-      color:#344354;
-      box-shadow:0 3px 12px #34435418;
+      cursor: pointer;
+      border: none;
+      border-radius: 13px;
+      padding: 11px 13px;
+      font-weight: 700;
+      color: #51435e;
+      transition:
+        opacity .2s,
+        transform .2s,
+        box-shadow .2s;
     }
-    button:hover { filter:brightness(.96); }
-    button:disabled { opacity:.5;cursor:not-allowed; }
-    button.primary {
-      background:#7964d9;
-      color:white;
+
+    button:hover {
+      opacity: .88;
     }
-    #world {
-      position:fixed;
-      inset:0;
-      z-index:0;
+
+    button:active {
+      transform: scale(.97);
     }
-    #world canvas { display:block; }
-    #topbar {
-      position:fixed;
-      top:16px;
-      left:16px;
-      right:16px;
-      z-index:10;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      pointer-events:none;
+
+    button:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible {
+      outline: 3px solid #9875df;
+      outline-offset: 2px;
     }
-    #topbar > * { pointer-events:auto; }
+
+    button:disabled {
+      opacity: .5;
+      cursor: wait;
+    }
+
+    .pink {
+      background: var(--pink);
+    }
+
+    .blue {
+      background: var(--blue);
+    }
+
+    .mint {
+      background: var(--mint);
+    }
+
+    .yellow {
+      background: var(--yellow);
+    }
+
+    .full {
+      width: 100%;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .app {
+      display: flex;
+      width: 100%;
+      height: 100dvh;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .world {
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      overflow: hidden;
+      isolation: isolate;
+
+      background:
+        radial-gradient(
+          ellipse at 50% 25%,
+          #e3f6ff 0%,
+          #a4ddf5 55%,
+          #79b5e2 100%
+        );
+    }
+
+    #scene {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    #scene canvas {
+      display: block;
+    }
+
+    #plusPlusBackground {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    #plusPlusEnvironmentLayer {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    #actors {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      pointer-events: none;
+    }
+
+    #actors > * {
+      pointer-events: auto;
+    }
+
+    #plusPlusEffectLayer {
+      position: absolute;
+      inset: 0;
+      z-index: 7;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
     #worldTitle {
-      background:#ffffffd9;
-      backdrop-filter:blur(12px);
-      padding:13px 18px;
-      border-radius:20px;
-      font-weight:800;
-      max-width:50vw;
+      position: absolute;
+      top: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+
+      max-width: 75%;
+      padding: 12px 24px;
+
+      background: rgba(255,255,255,.86);
+      border-radius: 24px;
+      box-shadow: 0 5px 20px rgba(40,40,70,.09);
+
+      font-size: 18px;
+      font-weight: 800;
+      text-align: center;
+      pointer-events: none;
     }
-    .toolbar {
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      justify-content:flex-end;
+
+    #speechBubble {
+      position: absolute;
+      left: 50%;
+      bottom: 26px;
+      transform: translateX(-50%);
+      z-index: 10;
+
+      width: max-content;
+      max-width: min(85%,650px);
+      min-height: 48px;
+
+      padding: 13px 22px;
+      border-radius: 20px;
+
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 6px 24px rgba(40,40,70,.12);
+
+      text-align: center;
+      font-size: 16px;
+      line-height: 1.6;
+      pointer-events: none;
     }
-    #bottomBar {
-      position:fixed;
-      left:50%;
-      bottom:22px;
-      transform:translateX(-50%);
-      z-index:10;
-      display:flex;
-      gap:10px;
-      padding:10px;
-      border-radius:24px;
-      background:#ffffffdb;
-      backdrop-filter:blur(14px);
-      box-shadow:0 8px 28px #26334a20;
+
+    .sidebar {
+      width: 365px;
+      flex: 0 0 365px;
+      height: 100%;
+      overflow-y: auto;
+
+      padding: 22px 19px 100px;
+
+      background: var(--panel);
+      border-left: 1px solid rgba(120,100,150,.12);
+
+      position: relative;
+      z-index: 20;
+
+      transition:
+        width .25s ease,
+        flex-basis .25s ease,
+        padding .25s ease;
     }
-    #mic.listening {
-      background:#fa7b8e;
-      color:white;
+
+    .sidebar.collapsed {
+      width: 0;
+      flex-basis: 0;
+      padding-left: 0;
+      padding-right: 0;
+      overflow: hidden;
+      border: 0;
     }
-    #panel {
-      position:fixed;
-      z-index:15;
-      top:0;
-      right:0;
-      height:100dvh;
-      width:min(390px,100vw);
-      background:#fffffff2;
-      backdrop-filter:blur(20px);
-      box-shadow:-8px 0 30px #25364a22;
-      transform:translateX(105%);
-      transition:transform .25s;
-      padding:22px;
-      overflow:auto;
+
+    .sidebar h1 {
+      font-size: 28px;
+      margin: 0 0 6px;
     }
-    #panel.open { transform:translateX(0); }
-    #panelHeader {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
+
+    .subtitle {
+      margin: 0 0 18px;
+      color: #80718d;
+      font-size: 13px;
     }
-    #status {
-      white-space:pre-wrap;
-      background:#f0f3fa;
-      border-radius:14px;
-      padding:14px;
-      font-size:13px;
-      line-height:1.7;
-      overflow-wrap:anywhere;
+
+    .section {
+      background: #fff;
+      border: 1px solid #eee6f5;
+      border-radius: 20px;
+
+      padding: 17px;
+      margin-bottom: 16px;
+
+      box-shadow: 0 4px 18px rgba(80,50,110,.04);
     }
+
+    .section h2 {
+      font-size: 17px;
+      margin: 0 0 12px;
+    }
+
+    .section p {
+      line-height: 1.6;
+    }
+
+    .hint {
+      font-size: 13px;
+      color: #81738e;
+      line-height: 1.6;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      margin: 10px 0;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 12px;
+    }
+
+    .actions button {
+      flex: 1 1 120px;
+    }
+
+    textarea,
+    select,
+    input[type="text"] {
+      width: 100%;
+      border: 1px solid #ddd3e8;
+      border-radius: 12px;
+      padding: 11px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 82px;
+      line-height: 1.6;
+    }
+
+    select {
+      min-height: 43px;
+      margin-bottom: 9px;
+    }
+
     #heroList {
-      display:grid;
-      gap:8px;
-      margin:12px 0;
+      padding: 10px;
+      border: 1px dashed #ded1eb;
+      border-radius: 13px;
+      min-height: 48px;
+      margin-bottom: 10px;
+      font-size: 13px;
     }
-    .heroBtn {
-      text-align:left;
-      width:100%;
+
+    #chatLog {
+      max-height: 220px;
+      min-height: 70px;
+      overflow-y: auto;
+      padding: 10px;
+      margin: 8px 0 12px;
+      border-radius: 12px;
+      background: #f9f5fd;
+      font-size: 13px;
+      line-height: 1.6;
     }
-    .heroBtn.active {
-      background:#e8e0ff;
+
+    #status {
+      margin-top: 10px;
+      padding: 12px;
+      background: #f8f4fc;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
     }
-    #chatInput {
-      width:100%;
-      resize:vertical;
-      border:1px solid #d7d9e5;
-      border-radius:12px;
-      padding:12px;
-      min-height:75px;
+
+    .mode-button {
+      border: 2px solid transparent;
     }
-    #message {
-      position:fixed;
-      z-index:11;
-      left:50%;
-      top:85px;
-      transform:translateX(-50%);
-      max-width:min(600px,90vw);
-      background:#ffffffed;
-      border-radius:17px;
-      padding:13px 20px;
-      box-shadow:0 6px 25px #283b4820;
-      text-align:center;
+
+    .mode-button[aria-pressed="true"] {
+      border-color: #a17de3;
+      box-shadow: 0 0 0 2px rgba(161,125,227,.15);
     }
-    #message[hidden],#loading[hidden] {
-      display:none;
+
+    #creationModeHint {
+      min-height: 40px;
     }
+
+    .teacher-background {
+      margin: 12px 0;
+      padding: 12px;
+      background: #f9f5fd;
+      border-radius: 12px;
+    }
+
+    .teacher-background label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .teacher-background input {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    #fullscreenButton,
+    #mobileToggle {
+      position: fixed;
+      z-index: 50;
+      bottom: 16px;
+
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 4px 18px rgba(0,0,0,.13);
+    }
+
+    #fullscreenButton {
+      left: 16px;
+    }
+
+    #mobileToggle {
+      right: 16px;
+    }
+
+    #bridgeFrame {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+      border: 0;
+    }
+
     .modal {
-      display:none;
-      position:fixed;
-      inset:0;
-      z-index:30;
-      background:#1e2636b8;
-      padding:20px;
-      align-items:center;
-      justify-content:center;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      padding: 18px;
+      background: rgba(38,30,52,.65);
     }
-    .modal.open { display:flex; }
-    .modalCard {
-      background:white;
-      width:min(780px,100%);
-      max-height:94dvh;
-      overflow:auto;
-      padding:22px;
-      border-radius:24px;
+
+    .dialog {
+      width: min(100%,740px);
+      max-height: 94dvh;
+      overflow-y: auto;
+
+      background: #fff;
+      border-radius: 22px;
+      padding: 22px;
+
+      box-shadow: 0 20px 70px rgba(0,0,0,.22);
     }
-    #video {
-      display:block;
-      width:100%;
-      max-height:58dvh;
-      background:#18212d;
-      border-radius:15px;
-      object-fit:contain;
+
+    .dialog h2 {
+      margin-top: 0;
     }
+
+    #cameraVideo {
+      display: block;
+      width: 100%;
+      max-height: 55dvh;
+      object-fit: contain;
+      border-radius: 15px;
+      background: #222;
+    }
+
     #editCanvas {
-      display:block;
-      max-width:100%;
-      max-height:55dvh;
-      margin:auto;
-      background-color:#fff;
-      background-image:
-        linear-gradient(45deg,#ddd 25%,transparent 25%),
-        linear-gradient(-45deg,#ddd 25%,transparent 25%),
-        linear-gradient(45deg,transparent 75%,#ddd 75%),
-        linear-gradient(-45deg,transparent 75%,#ddd 75%);
-      background-size:18px 18px;
-      background-position:0 0,0 9px,9px -9px,-9px 0;
-      touch-action:none;
-      cursor:crosshair;
+      display: block;
+      width: 100%;
+      max-height: 55dvh;
+      object-fit: contain;
+      border-radius: 14px;
+      background:
+        conic-gradient(
+          #eee 25%,
+          #fff 0 50%,
+          #eee 0 75%,
+          #fff 0
+        ) 0 0 / 24px 24px;
+
+      touch-action: none;
     }
-    .modalActions {
-      display:flex;
-      flex-wrap:wrap;
-      gap:9px;
-      margin-top:15px;
+
+    #brushSize {
+      display: block;
+      width: 100%;
+      margin: 10px 0;
     }
-    #intro {
-      position:fixed;
-      inset:0;
-      z-index:40;
-      background:#eaf5f5eF;
-      display:grid;
-      place-items:center;
-      text-align:center;
-      padding:25px;
+
+    .creation-progress {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #765e8e;
     }
-    #introContent {
-      max-width:540px;
-    }
-    #intro h1 {
-      font-size:clamp(34px,5vw,64px);
-      margin:0 0 12px;
-    }
-    #intro p {
-      line-height:1.9;
-      margin-bottom:24px;
-    }
-    #bridge {
-      position:absolute;
-      width:1px;
-      height:1px;
-      opacity:0;
-      pointer-events:none;
-      border:0;
-    }
-    @media(max-width:640px) {
-      #topbar { top:10px;left:10px;right:10px; }
-      #worldTitle { font-size:13px;padding:10px; }
-      .toolbar button { padding:9px; }
-      #bottomBar {
-        width:calc(100% - 20px);
-        justify-content:center;
-        bottom:10px;
+
+    @media (max-width: 850px) {
+      .sidebar {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(365px,94vw);
+        height: 100dvh;
+        flex-basis: auto;
+        box-shadow: -8px 0 35px rgba(0,0,0,.12);
       }
-      #bottomBar button { flex:1;padding:10px 5px; }
+
+      .sidebar.collapsed {
+        width: 0;
+      }
+
+      #worldTitle {
+        top: 12px;
+        font-size: 15px;
+        padding: 10px 15px;
+      }
+
+      #speechBubble {
+        bottom: 74px;
+        font-size: 14px;
+      }
+
+      .dialog {
+        padding: 16px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      button,
+      .sidebar {
+        transition: none;
+      }
     }
   </style>
 </head>
+
 <body>
-  <div id="world"></div>
 
-  <div id="topbar">
-    <div id="worldTitle">🧩 Plus-Plus｜想像有形</div>
-    <div class="toolbar">
-      <button id="sound">🔊</button>
-      <button id="fullscreen">⛶ 全螢幕</button>
-      <button id="more">☰ 工作台</button>
-    </div>
-  </div>
+  <div class="app" id="app">
 
-  <div id="message" hidden>
-    <span id="loading" hidden>⏳ </span>
-    <span id="messageText"></span>
-  </div>
+    <!-- ======================================
+         互動世界
+    ======================================= -->
 
-  <div id="bottomBar">
-    <button id="photo" class="primary">📷 拍照</button>
-    <button id="upload">🖼️ 上傳</button>
-    <button id="mic">🎤 語音</button>
-  </div>
+    <main class="world" id="world">
 
-  <aside id="panel">
-    <div id="panelHeader">
-      <h2>🧩 創作工作台</h2>
-      <button id="panelToggle">✕</button>
-    </div>
+      <!-- 保留一評 p5.js 場景容器 -->
+      <div id="scene"></div>
 
-    <h3>系統狀態</h3>
-    <div id="status">正在啟動……</div>
+      <!-- Plus-Plus AI 生成背景 -->
+      <img
+        id="plusPlusBackground"
+        alt=""
+        class="hidden"
+      >
 
-    <div class="modalActions">
-      <button id="test">🔌 測試 AI 連線</button>
-      <button id="reconnect">🔄 重新連線</button>
-    </div>
+      <!-- AI 延伸場景物件 -->
+      <div id="plusPlusEnvironmentLayer"></div>
 
-    <h3>我的角色</h3>
-    <div id="heroList">尚未加入角色</div>
+      <!-- 保留一評角色容器 -->
+      <div id="actors"></div>
 
-    <h3>文字指令</h3>
-    <textarea id="chatInput"
-      placeholder="例如：幫我的積木魚加上紫色翅膀，然後讓牠飛起來"></textarea>
-    <div class="modalActions">
-      <button id="sendText" class="primary">
-        ✨ 送出想像
-      </button>
-    </div>
+      <!-- 積木技能與粒子效果 -->
+      <div id="plusPlusEffectLayer"></div>
 
-    <h3>世界管理</h3>
-    <div class="modalActions">
-      <button id="retry">🌈 重做背景</button>
-      <button id="clear">🗑️ 清空世界</button>
-    </div>
-  </aside>
-
-  <div id="cameraModal" class="modal">
-    <div class="modalCard">
-      <h2>📷 拍攝 Plus-Plus 積木</h2>
-      <video id="video" autoplay playsinline muted></video>
-      <div class="modalActions">
-        <button id="capture" class="primary">📸 拍攝</button>
-        <button id="cameraUpload">🖼️ 選擇照片</button>
-        <button id="closeCamera">關閉</button>
+      <div id="worldTitle">
+        🧩 Mindspace｜Plus-Plus 想像世界
       </div>
-    </div>
-  </div>
 
-  <div id="editorModal" class="modal">
-    <div class="modalCard">
-      <h2>✂️ 作品去背與修整</h2>
-      <p>可先用 AI 去背，再用擦除、還原筆刷修整原始積木。</p>
-      <canvas id="editCanvas"></canvas>
-      <div class="modalActions">
-        <button id="removeBgAI">✨ AI 去背</button>
-        <button id="quickBg">⚡ 快速去背</button>
-        <button id="eraseMode">🧽 擦除</button>
-        <button id="restoreMode">🖌️ 還原</button>
-        <button id="undoEdit">↶ 復原</button>
-        <button id="resetEdit">重設</button>
+      <div id="speechBubble">
+        ✨ 一起讓你的積木創作活起來！
       </div>
-      <p>
-        筆刷大小：
-        <input id="brushSize" type="range"
-               min="8" max="90" value="28">
+
+    </main>
+
+    <!-- ======================================
+         側邊控制面板
+    ======================================= -->
+
+    <aside class="sidebar" id="sidebar">
+
+      <h1>🧩 Mindspace</h1>
+
+      <p class="subtitle">
+        Plus-Plus × 想像 × AI 互動探索
       </p>
-      <div class="modalActions">
-        <button id="saveCreation" class="primary">
-          🧩 放進世界
+
+      <!-- ====================================
+           創作模式
+      ===================================== -->
+
+      <section class="section" id="creationModeSection">
+
+        <h2>🌈 選擇創作模式</h2>
+
+        <p class="hint">
+          你的積木作品想成為一個角色，
+          還是成為世界的一部分？
+        </p>
+
+        <div class="grid">
+
+          <button
+            id="characterModeButton"
+            class="pink mode-button"
+            type="button"
+            aria-pressed="true"
+          >
+            🧸 Character｜角色
+          </button>
+
+          <button
+            id="environmentModeButton"
+            class="blue mode-button"
+            type="button"
+            aria-pressed="false"
+          >
+            🌍 Environment｜背景
+          </button>
+
+        </div>
+
+        <p id="creationModeHint" class="hint">
+          角色模式：保留原始積木造型，
+          讓角色進入世界、移動並接受語音創作。
+        </p>
+
+        <textarea
+          id="creationDescription"
+          placeholder="這是什麼作品？例如：這是一隻會飛的彩虹龍，牠住在天空上的積木城堡。"
+        ></textarea>
+
+        <button
+          id="generateCreationWorld"
+          class="full mint"
+          type="button"
+        >
+          ✨ 生成 Plus-Plus 想像世界
         </button>
-        <button id="cancelEditor">取消</button>
-      </div>
-    </div>
+
+        <p
+          id="creationProgress"
+          class="creation-progress"
+          aria-live="polite"
+        ></p>
+
+      </section>
+
+      <!-- ====================================
+           原始積木角色
+      ===================================== -->
+
+      <section class="section">
+
+        <h2>📸 我的 Plus-Plus 作品</h2>
+
+        <div id="heroList">
+          還沒有積木作品
+        </div>
+
+        <div class="grid">
+
+          <button
+            id="openCamera"
+            class="pink"
+            type="button"
+          >
+            📸 拍照
+          </button>
+
+          <button
+            id="uploadPhoto"
+            class="yellow"
+            type="button"
+          >
+            🖼️ 上傳照片
+          </button>
+
+          <button
+            id="editHero"
+            class="blue"
+            type="button"
+          >
+            🪄 修改去背
+          </button>
+
+          <button
+            id="deleteHero"
+            class="mint"
+            type="button"
+          >
+            🗑️ 移除作品
+          </button>
+
+        </div>
+
+        <button
+          id="inspectHero"
+          class="full blue"
+          type="button"
+        >
+          🧠 AI 觀察積木作品
+        </button>
+
+        <p id="appearance" class="hint"></p>
+
+      </section>
+
+      <!-- ====================================
+           AI 語音與自由創作
+      ===================================== -->
+
+      <section class="section">
+
+        <h2>🎤 和你的積木世界說話</h2>
+
+        <select id="selectedHero">
+          <option value="">
+            請先建立作品
+          </option>
+        </select>
+
+        <div id="chatLog"></div>
+
+        <textarea
+          id="chatInput"
+          placeholder="自由說出任何想法，例如：讓我的龍頭上長出一棵會發光的樹，然後帶牠飛到彩虹上。"
+        ></textarea>
+
+        <div class="grid">
+
+          <button
+            id="micButton"
+            class="pink"
+            type="button"
+          >
+            🎙️ 開始說話
+          </button>
+
+          <button
+            id="sendButton"
+            class="blue"
+            type="button"
+          >
+            💬 送出想法
+          </button>
+
+          <button
+            id="voiceButton"
+            class="mint"
+            type="button"
+          >
+            🔊 語音：開
+          </button>
+
+          <button
+            id="stopVoice"
+            class="yellow"
+            type="button"
+          >
+            ⏹️ 停止語音
+          </button>
+
+        </div>
+
+        <p class="hint">
+          不需要使用固定指令。
+          AI 會理解你的描述，
+          自行規劃積木造型、技能、動作與場景。
+        </p>
+
+      </section>
+
+      <!-- ====================================
+           造型延伸與技能
+           保留一評 ID
+      ===================================== -->
+
+      <section class="section">
+
+        <h2>✨ AI 積木造型與技能</h2>
+
+        <textarea
+          id="transformInput"
+          placeholder="例如：幫我的積木角色加上會發光的翅膀，但原本的身體不要改變。"
+        ></textarea>
+
+        <div class="grid">
+
+          <button
+            id="transformButton"
+            class="pink"
+            type="button"
+          >
+            ✨ AI 延伸造型
+          </button>
+
+          <button
+            id="restoreButton"
+            class="blue"
+            type="button"
+          >
+            ↩️ 原始造型
+          </button>
+
+          <button
+            id="showTransform"
+            class="mint"
+            type="button"
+          >
+            👀 顯示延伸造型
+          </button>
+
+          <button
+            id="skillButton"
+            class="yellow"
+            type="button"
+          >
+            ⚡ 表演技能
+          </button>
+
+        </div>
+
+        <p class="hint">
+          原始積木照片保持不變。
+          AI 生成的新造型會以獨立圖層附加。
+        </p>
+
+      </section>
+
+      <!-- ====================================
+           世界與背景
+      ===================================== -->
+
+      <section class="section">
+
+        <h2>🌍 探索世界</h2>
+
+        <select id="worldSelect">
+          <option value="ocean">
+            🌊 海底世界
+          </option>
+
+          <option value="forest">
+            🌳 森林世界
+          </option>
+
+          <option value="space">
+            🚀 太空世界
+          </option>
+        </select>
+
+        <div class="teacher-background">
+
+          <label for="teacherBg">
+            🖼️ 自訂背景圖片
+          </label>
+
+          <input
+            id="teacherBg"
+            type="file"
+            accept="image/*"
+          >
+
+          <button
+            id="clearTeacherBg"
+            class="full blue"
+            type="button"
+          >
+            ↩️ 恢復預設背景
+          </button>
+
+        </div>
+
+        <button
+          id="resetButton"
+          class="full yellow"
+          type="button"
+        >
+          🌱 開始新創作
+        </button>
+
+      </section>
+
+      <!-- ====================================
+           AI 連線
+      ===================================== -->
+
+      <section class="section">
+
+        <h2>🔌 AI 系統狀態</h2>
+
+        <button
+          id="testBridge"
+          class="full mint"
+          type="button"
+        >
+          🔍 測試 AI 連線
+        </button>
+
+        <div id="status" aria-live="polite">
+          等待系統啟動……
+        </div>
+
+      </section>
+
+    </aside>
+
   </div>
 
-  <input id="file" type="file"
-         accept="image/*" hidden>
+  <!-- ======================================
+       全螢幕及側欄按鈕
+  ======================================= -->
 
-  <div id="intro">
-    <div id="introContent">
-      <h1>🧩 想像有形</h1>
-      <h2>Plus-Plus Interactive World</h2>
-      <p>
-        拼出你的作品、拍下它，
-        讓它走進你創造的世界。<br>
-        你可以透過語音增加造型、創造朋友、
-        改變環境，讓想像繼續生長。
+  <button
+    id="fullscreenButton"
+    type="button"
+  >
+    ⛶ 全螢幕
+  </button>
+
+  <button
+    id="mobileToggle"
+    type="button"
+    aria-label="開啟或收合操作面板"
+  >
+    ☰
+  </button>
+
+  <!-- ======================================
+       Google Apps Script Bridge
+  ======================================= -->
+
+  <iframe
+    id="bridgeFrame"
+    title="Mindspace Plus-Plus AI Bridge"
+  ></iframe>
+
+  <!-- ======================================
+       照片上傳
+  ======================================= -->
+
+  <input
+    id="photoFile"
+    type="file"
+    accept="image/*"
+    hidden
+  >
+
+  <!-- 保留舊版可能使用的 cameraUpload -->
+  <input
+    id="cameraUpload"
+    type="file"
+    accept="image/*"
+    capture="environment"
+    hidden
+  >
+
+  <!-- ======================================
+       攝影機
+  ======================================= -->
+
+  <div
+    id="cameraModal"
+    class="modal hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-label="拍攝積木作品"
+  >
+
+    <div class="dialog">
+
+      <h2>📸 拍攝 Plus-Plus 積木作品</h2>
+
+      <video
+        id="cameraVideo"
+        autoplay
+        muted
+        playsinline
+      ></video>
+
+      <p id="cameraMessage" class="hint">
+        準備攝影機……
       </p>
-      <button id="begin" class="primary">
-        ✨ 開始創作
-      </button>
+
+      <div class="actions">
+
+        <button
+          id="captureButton"
+          class="pink"
+          type="button"
+        >
+          📸 拍照
+        </button>
+
+        <button
+          id="switchCamera"
+          class="blue"
+          type="button"
+        >
+          🔄 切換鏡頭
+        </button>
+
+        <button
+          id="retryCamera"
+          type="button"
+        >
+          🔄 重試
+        </button>
+
+        <button
+          id="closeCamera"
+          type="button"
+        >
+          ✖ 關閉
+        </button>
+
+      </div>
+
     </div>
+
   </div>
 
-  <iframe id="bridge" title="AI Bridge"></iframe>
+  <!-- ======================================
+       AI 去背與手動編輯器
+  ======================================= -->
 
-  <script src="./sketch.js?v=20261031-2"></script>
-  <script src="./ai-director.js?v=20261031-2"></script>
+  <div
+    id="editorModal"
+    class="modal hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-label="積木作品去背編輯"
+  >
+
+    <div class="dialog">
+
+      <h2>🪄 Plus-Plus 積木去背編輯</h2>
+
+      <canvas id="editCanvas"></canvas>
+
+      <p class="hint">
+        可使用 AI 去背、快速去背，
+        或使用筆刷擦除與還原。
+        請保留原本的積木形狀與顏色。
+      </p>
+
+      <div class="actions">
+
+        <button
+          id="removeBgAI"
+          class="blue"
+          type="button"
+        >
+          🤖 AI 自動去背
+        </button>
+
+        <button
+          id="removeBg"
+          class="yellow"
+          type="button"
+        >
+          ✨ 快速去背
+        </button>
+
+      </div>
+
+      <div class="actions">
+
+        <button
+          id="eraseMode"
+          class="pink"
+          type="button"
+        >
+          🧽 擦除
+        </button>
+
+        <button
+          id="restoreMode"
+          class="mint"
+          type="button"
+        >
+          🖌️ 還原
+        </button>
+
+        <button
+          id="undoEdit"
+          class="blue"
+          type="button"
+        >
+          ↶ 上一步
+        </button>
+
+        <button
+          id="resetEdit"
+          class="yellow"
+          type="button"
+        >
+          ↺ 重設
+        </button>
+
+      </div>
+
+      <p class="hint">
+        筆刷大小
+      </p>
+
+      <input
+        id="brushSize"
+        type="range"
+        min="5"
+        max="90"
+        value="28"
+      >
+
+      <div class="actions">
+
+        <button
+          id="saveEditor"
+          class="mint"
+          type="button"
+        >
+          🌈 放入世界
+        </button>
+
+        <button
+          id="closeEditor"
+          type="button"
+        >
+          取消
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ======================================
+       JavaScript
+
+       不另外載入 plus-plus.js
+       Plus-Plus 功能直接整合在
+       sketch.js 與 ai-director.js
+  ======================================= -->
+
+  <script src="./sketch.js"></script>
+  <script src="./ai-director.js"></script>
+  <script src="./tool-basket.js"></script>
+
 </body>
 </html>
