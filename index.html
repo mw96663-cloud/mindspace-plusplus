@@ -3347,97 +3347,89 @@ connectBridge();
      01｜建立操作面板
   ================================= */
 
+  /* ================================
+     01｜AI 懸浮泡泡按鈕
+     不遮擋 Mindspace 世界
+  ================================= */
+
   const panel = document.createElement("div");
 
   panel.id = "mindspaceVoiceGuide";
 
   panel.style.cssText = `
     position: fixed;
-    right: 18px;
-    bottom: 92px;
+    right: 20px;
+    bottom: 350px;
     z-index: 9998;
-    width: min(310px, calc(100vw - 36px));
-    background: rgba(255,255,255,.97);
-    border: 1px solid #ddd;
-    border-radius: 18px;
-    padding: 14px;
-    box-shadow: 0 6px 24px rgba(0,0,0,.15);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    width: 60px;
     font-family: Arial, sans-serif;
-    color: #25374e;
+    pointer-events: none;
   `;
 
   panel.innerHTML = `
-    <div style="
-      font-weight:bold;
-      margin-bottom:10px;
-      font-size:15px;
-    ">
-      ✨ Mindspace AI 陪伴者
-    </div>
-
-    <select
-      id="mindspaceGuideMode"
+    <button
+      id="mindspaceGuideStart"
+      type="button"
+      title="點擊啟動或停止 AI 引導；長按切換模式"
+      aria-label="啟動 AI 持續語音引導"
+      aria-pressed="false"
       style="
-        width:100%;
-        padding:9px;
-        margin-bottom:10px;
-        border-radius:10px;
+        width:60px;
+        height:60px;
+        border-radius:50%;
+        border:0;
+        background:white;
+        color:#25374e;
+        font-size:27px;
+        cursor:pointer;
+        box-shadow:0 5px 20px rgba(0,0,0,.2);
+        pointer-events:auto;
+        transition:background .2s,transform .2s;
       "
-    >
-      <option value="child">
-        兒童探索模式
-      </option>
+    >✨</button>
 
-      <option value="elder">
-        長輩陪伴模式
-      </option>
-    </select>
-
-    <div style="
-      display:flex;
-      gap:8px;
-    ">
-      <button
-        id="mindspaceGuideStart"
-        type="button"
-        style="
-          flex:1;
-          padding:11px;
-          border-radius:10px;
-          background:#ffcf5d;
-          color:#25374e;
-          font-weight:bold;
-        "
-      >
-        ▶ 啟動 AI 引導
-      </button>
-
-      <button
-        id="mindspaceGuideStop"
-        type="button"
-        style="
-          padding:11px;
-          border-radius:10px;
-          background:#e8eef5;
-          color:#25374e;
-        "
-      >
-        ■ 停止
-      </button>
-    </div>
-
-    <div
+    <span
       id="mindspaceGuideStatus"
       aria-live="polite"
       style="
-        font-size:12px;
-        color:#64748b;
-        margin-top:10px;
-        line-height:1.6;
+        font-size:11px;
+        font-weight:600;
+        color:white;
+        text-shadow:0 1px 5px rgba(0,0,0,.65);
+        white-space:nowrap;
+        pointer-events:none;
+      "
+    >AI 引導</span>
+
+    <select
+      id="mindspaceGuideMode"
+      aria-label="AI 引導模式"
+      style="
+        display:none;
+        position:absolute;
+        right:65px;
+        top:12px;
+        width:125px;
+        padding:9px;
+        border-radius:10px;
+        background:white;
+        box-shadow:0 4px 16px rgba(0,0,0,.15);
+        pointer-events:auto;
       "
     >
-      尚未啟動 AI 引導
-    </div>
+      <option value="child">兒童探索</option>
+      <option value="elder">長輩陪伴</option>
+    </select>
+
+    <button
+      id="mindspaceGuideStop"
+      type="button"
+      style="display:none"
+    >停止</button>
   `;
 
   document.body.appendChild(panel);
@@ -3463,7 +3455,117 @@ connectBridge();
     );
 
   function status(message) {
-    statusElement.textContent = message;
+    if (!state.enabled) {
+      statusElement.textContent = "AI 引導";
+      return;
+    }
+
+    if (
+      message.includes("思考") ||
+      message.includes("等待")
+    ) {
+      statusElement.textContent = "AI 思考中";
+    } else if (
+      message.includes("正在陪伴")
+    ) {
+      statusElement.textContent = "AI 說話中";
+    } else {
+      statusElement.textContent = "AI 已開啟";
+    }
+
+    startButton.title = message;
+  }
+
+  // 點一下：啟動或停止持續引導
+  // 長按：顯示兒童／長輩模式選單
+
+  let longPressTimer = null;
+  let longPressed = false;
+
+  startButton.addEventListener(
+    "pointerdown",
+    () => {
+      longPressed = false;
+
+      clearTimeout(longPressTimer);
+
+      longPressTimer = setTimeout(() => {
+        longPressed = true;
+
+        modeSelect.style.display =
+          modeSelect.style.display === "none"
+            ? "block"
+            : "none";
+      }, 650);
+    }
+  );
+
+  ["pointerup", "pointercancel", "pointerleave"]
+    .forEach(name => {
+      startButton.addEventListener(
+        name,
+        () => clearTimeout(longPressTimer)
+      );
+    });
+
+  startButton.addEventListener(
+    "click",
+    event => {
+      if (longPressed) {
+        event.stopImmediatePropagation();
+        longPressed = false;
+        return;
+      }
+
+      if (state.enabled) {
+        stopButton.click();
+      }
+    },
+    true
+  );
+
+  modeSelect.addEventListener(
+    "change",
+    () => {
+      state.mode = modeSelect.value;
+
+      modeSelect.style.display = "none";
+
+      if (state.enabled) {
+        status("AI 持續引導中");
+      }
+    }
+  );
+
+  // 按鈕狀態同步
+  function updateGuideBubble() {
+    const enabled = state.enabled;
+
+    startButton.style.background =
+      enabled ? "#ffcf5d" : "white";
+
+    startButton.style.transform =
+      enabled ? "scale(1.06)" : "scale(1)";
+
+    startButton.setAttribute(
+      "aria-pressed",
+      String(enabled)
+    );
+
+    startButton.setAttribute(
+      "aria-label",
+      enabled
+        ? "停止 AI 持續語音引導"
+        : "啟動 AI 持續語音引導"
+    );
+
+    startButton.disabled = false;
+
+    startButton.textContent =
+      enabled ? "💬" : "✨";
+
+    statusElement.textContent =
+      enabled ? "AI 已開啟" : "AI 引導";
   }
 
   function getCreations() {
@@ -3905,13 +4007,13 @@ ${JSON.stringify(recentCreations)}
      07｜啟動／停止
   ================================= */
 
+ 
+  /* ================================
+     07｜泡泡按鈕啟動／停止
+  ================================= */
+
   startButton.onclick = () => {
-    if (state.enabled) {
-      status(
-        "🟢 AI 已經持續引導中，不需要重複啟動"
-      );
-      return;
-    }
+    if (state.enabled) return;
 
     state.mode = modeSelect.value;
     state.enabled = true;
@@ -3920,17 +4022,13 @@ ${JSON.stringify(recentCreations)}
     state.lastCreationCount =
       getCreations().length;
 
-    startButton.textContent =
-      "● AI 引導中";
+    modeSelect.style.display = "none";
 
-    startButton.disabled = true;
+    updateGuideBubble();
 
-    modeSelect.disabled = true;
+    status("AI 持續引導中");
 
-    status(
-      "🟢 AI 持續引導已啟動"
-    );
-
+    // 第一次點擊立即生成歡迎引導
     generateGuide("welcome", true);
   };
 
@@ -3939,16 +4037,9 @@ ${JSON.stringify(recentCreations)}
 
     stopSpeech();
 
-    startButton.disabled = false;
+    updateGuideBubble();
 
-    startButton.textContent =
-      "▶ 啟動 AI 引導";
-
-    modeSelect.disabled = false;
-
-    status(
-      "⚪ AI 引導已停止"
-    );
+    status("AI 引導已停止");
   };
 
   /* ================================
