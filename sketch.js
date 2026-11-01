@@ -2894,6 +2894,158 @@ window.performMindspaceAction = function(command) {
     ]);
   };
 
+/* =========================================================
+   Mindspace Plus-Plus
+   黃色選取圓圈｜短暫顯示控制模組
+
+   功能：
+   1. 選取角色時顯示黃色大圓圈
+   2. 3 秒沒有操作，自動隱藏
+   3. 文字／語音指令進行中保持顯示
+   4. AI 指令完成後立即隱藏
+   5. 圓圈隱藏不取消角色選取
+   6. 不修改原始 PNG、角色移動與 AI 資料
+========================================================= */
+
+(function () {
+  "use strict";
+
+  const SELECTION_DURATION = 3000;
+
+  let visibleUntil = 0;
+  let commandActive = false;
+
+  function showSelection() {
+    visibleUntil =
+      performance.now() + SELECTION_DURATION;
+  }
+
+  function hideSelection() {
+    visibleUntil = 0;
+    commandActive = false;
+  }
+
+  function isSelectionVisible() {
+    return (
+      commandActive ||
+      performance.now() < visibleUntil
+    );
+  }
+
+  // 保留原本的角色選取功能
+  const originalSelect =
+    window.selectMindspaceCreation;
+
+  window.selectMindspaceCreation = function (id) {
+    const success = originalSelect(id);
+
+    if (success) {
+      commandActive = false;
+      showSelection();
+    }
+
+    return success;
+  };
+
+  // 保留原本的黃色圓圈樣式，
+  // 只改變它何時顯示
+  const originalDrawSelection =
+    drawSelectionIndicator;
+
+  drawSelectionIndicator = function () {
+    if (!isSelectionVisible()) {
+      return;
+    }
+
+    originalDrawSelection();
+  };
+
+  // 文字或語音指令開始
+  window.startMindspaceCommand = function () {
+    const selected =
+      window.getSelectedMindspaceCreation?.();
+
+    if (!selected) {
+      return false;
+    }
+
+    commandActive = true;
+    showSelection();
+
+    return true;
+  };
+
+  // 指令完成、取消或失敗
+  window.finishMindspaceCommand = function () {
+    hideSelection();
+  };
+
+  // AI operations 套用完成後隱藏
+  const originalApplyOperations =
+    window.applyMindspaceAIOperations;
+
+  if (
+    typeof originalApplyOperations === "function"
+  ) {
+    window.applyMindspaceAIOperations =
+      function (operations) {
+        try {
+          return originalApplyOperations(
+            operations
+          );
+        } finally {
+          hideSelection();
+        }
+      };
+  }
+
+  // 初次 AI 分類完成後也隱藏圓圈
+  const originalClassification =
+    window.applyMindspaceClassification;
+
+  if (
+    typeof originalClassification === "function"
+  ) {
+    window.applyMindspaceClassification =
+      function (...args) {
+        try {
+          return originalClassification(
+            ...args
+          );
+        } finally {
+          hideSelection();
+        }
+      };
+  }
+
+  // 清空世界時重設選取提示
+  const originalClear =
+    window.clearMindspaceWorld;
+
+  window.clearMindspaceWorld = function () {
+    hideSelection();
+
+    return originalClear();
+  };
+
+  // 方便在 Console 檢查
+  window.getMindspaceSelectionDisplay = function () {
+    return {
+      selectedId:
+        window.mindspaceSelectedId,
+      visible: isSelectionVisible(),
+      commandActive: commandActive
+    };
+  };
+
+  // 網頁首次載入時不顯示黃色圓圈
+  hideSelection();
+
+  console.log(
+    "[Mindspace] 黃色選取圓圈控制模組已載入"
+  );
+})();
+
   console.log(
     "[Mindspace] 自主移動與 AI 指令執行模組已載入"
   );
