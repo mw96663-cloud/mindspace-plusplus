@@ -4588,5 +4588,315 @@ stopButton.onclick = stopGuide;
 })();
 </script>
 
+<script>
+/* =========================================================
+   MINDSPACE｜VOICE TO OPENAI ACCESSORY V1
+
+   將原有 AI appearance operations
+   接到真實 OpenAI PNG 生成流程。
+
+   不重做語音辨識。
+   不取代原本的指令理解。
+   ========================================================= */
+
+(function () {
+  "use strict";
+
+  const pendingAccessories = new Set();
+
+  function normalizeAIResponse(response) {
+    if (
+      response &&
+      response.ok === false
+    ) {
+      throw new Error(
+        response.error ||
+        "OpenAI 圖片生成失敗"
+      );
+    }
+
+    const result =
+      response?.result || response;
+
+    if (
+      !result ||
+      result.success !== true ||
+      typeof result.image !== "string" ||
+      !result.image.startsWith(
+        "data:image/png;base64,"
+      )
+    ) {
+      throw new Error(
+        "後端沒有回傳有效的 AI PNG"
+      );
+    }
+
+    return result;
+  }
+
+  function getTargetId(operation) {
+    const requested =
+      operation.targetId;
+
+    const creations =
+      window.mindspaceCreations || [];
+
+    if (
+      requested &&
+      creations.some(
+        item => item.id === requested
+      )
+    ) {
+      return requested;
+    }
+
+    const selected =
+      window.mindspaceSelectedId;
+
+    if (
+      selected &&
+      creations.some(
+        item => item.id === selected
+      )
+    ) {
+      return selected;
+    }
+
+    // 只有一個角色時才自動選取，
+    // 避免錯誤修改其他孩子的角色。
+    const characters = creations.filter(
+      item => item.kind === "character"
+    );
+
+    if (characters.length === 1) {
+      return characters[0].id;
+    }
+
+    return null;
+  }
+
+  async function generateAccessory(
+    operation
+  ) {
+    const targetId =
+      getTargetId(operation);
+
+    if (!targetId) {
+      throw new Error(
+        "請先選取要修改的角色"
+      );
+    }
+
+    const feature = String(
+      operation.feature ||
+      operation.appearance ||
+      "accessory"
+    );
+
+    const description = String(
+      operation.description ||
+      operation.appearance ||
+      feature
+    );
+
+    const count = Math.max(
+      1,
+      Math.min(
+        30,
+        Math.round(
+          Number(operation.count) || 1
+        )
+      )
+    );
+
+    const color = String(
+      operation.color || ""
+    );
+
+    const key = [
+      targetId,
+      feature,
+      description,
+      count,
+      color
+    ].join("|");
+
+    if (pendingAccessories.has(key)) {
+      return;
+    }
+
+    pendingAccessories.add(key);
+
+    window.dispatchEvent(
+      new CustomEvent(
+        "mindspace:ai-accessory-loading",
+        {
+          detail: {
+            targetId,
+            description
+          }
+        }
+      )
+    );
+
+    try {
+      console.log(
+        "[Mindspace] 開始生成 AI 配件",
+        {
+          targetId,
+          description,
+          feature,
+          count
+        }
+      );
+
+      const rawResponse =
+        await requestAI(
+          "generatePlusPlusAccessoryAI",
+          {
+            description,
+            accessory: feature,
+            color,
+            count
+          },
+          180000
+        );
+
+      const result =
+        normalizeAIResponse(rawResponse);
+
+      if (
+        typeof window.addMindspaceAIAccessory
+        !== "function"
+      ) {
+        throw new Error(
+          "sketch.js AI 配件渲染器尚未載入"
+        );
+      }
+
+      await window.addMindspaceAIAccessory({
+        targetId,
+        feature,
+        description,
+        count,
+        image: result.image,
+        model: result.model
+      });
+
+      console.log(
+        "[Mindspace] AI 配件生成並附著成功",
+        {
+          targetId,
+          feature,
+          count
+        }
+      );
+
+      return {
+        success: true,
+        targetId,
+        count
+      };
+
+    } catch (error) {
+      console.error(
+        "[Mindspace] AI 配件生成失敗",
+        error
+      );
+
+      window.dispatchEvent(
+        new CustomEvent(
+          "mindspace:ai-accessory-error",
+          {
+            detail: {
+              targetId,
+              description,
+              message:
+                error.message ||
+                String(error)
+            }
+          }
+        )
+      );
+
+      throw error;
+
+    } finally {
+      pendingAccessories.delete(key);
+    }
+  }
+
+  window.generateMindspaceAccessoryAI =
+    generateAccessory;
+
+  // 保留原本的 AI operation 處理器。
+  const previousApply =
+    window.applyMindspaceAIOperations;
+
+  if (
+    typeof previousApply !== "function"
+  ) {
+    console.error(
+      "[Mindspace] 找不到 AI operations 處理器"
+    );
+    return;
+  }
+
+  window.applyMindspaceAIOperations =
+    function (operations) {
+
+      // 先照原本流程套用指令。
+      const originalResult =
+        previousApply(operations);
+
+      // 只處理外觀新增，
+      // 其他技能、故事、環境照舊。
+      const appearances =
+        Array.isArray(operations)
+          ? operations.filter(
+              operation =>
+                operation &&
+                operation.type ===
+                  "appearance"
+            )
+          : [];
+
+      // 原本指令執行失敗時，不送圖片生成。
+      Promise.resolve(originalResult)
+        .then(result => {
+          if (
+            result &&
+            result.success === false &&
+            result.applied === 0
+          ) {
+            return;
+          }
+
+          for (const operation of appearances) {
+            generateAccessory(operation)
+              .catch(error => {
+                console.error(
+                  "[Mindspace] 配件未完成：",
+                  error.message
+                );
+              });
+          }
+        })
+        .catch(error => {
+          console.error(
+            "[Mindspace] AI 指令執行失敗",
+            error
+          );
+        });
+
+      return originalResult;
+    };
+
+  console.log(
+    "[Mindspace] 語音到 OpenAI 配件流程已啟動"
+  );
+})();
+</script>
+
 </body>
 </html>
