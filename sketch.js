@@ -2172,7 +2172,164 @@ window.performMindspaceAction = function(command) {
     return "#A7D8FF";
   }
 
+function drawPlusBlueprintFeature(feature, item) {
+  const bp = feature.plusBlueprint;
+
+  if (
+    !bp ||
+    !Array.isArray(bp.grid) ||
+    !Array.isArray(bp.palette)
+  ) {
+    return;
+  }
+
+  const alphabet = "ABCDEFGH";
+  const rows = bp.grid.length;
+  const cols = Math.max(
+    1,
+    ...bp.grid.map(row => String(row).length)
+  );
+
+  if (!rows) return;
+
+  const count = Math.round(
+    safeNumber(feature.count, 1, 1, 30)
+  );
+
+  const name = safeText(
+    feature.feature || feature.description
+  ).toLowerCase();
+
+  const cell = Math.max(
+    2,
+    Math.min(
+      item.w * 0.32 / cols,
+      item.h * 0.35 / rows
+    )
+  );
+
+  const motion = String(bp.motion || "none");
+  const bpScale = safeNumber(
+    bp.scale, 1, 0.4, 2.5
+  );
+
+  function drawGrid() {
+    for (let y = 0; y < rows; y++) {
+      const row = String(bp.grid[y]).toUpperCase();
+
+      for (let x = 0; x < row.length; x++) {
+        const index = alphabet.indexOf(row[x]);
+
+        if (
+          index < 0 ||
+          index >= bp.palette.length
+        ) continue;
+
+        const color = bp.palette[index];
+
+        if (!/^#[0-9a-f]{6}$/i.test(color)) {
+          continue;
+        }
+
+        plusBlock(
+          (x - cols / 2 + 0.5) * cell,
+          (y - rows / 2 + 0.5) * cell,
+          cell * 0.94,
+          color
+        );
+      }
+    }
+  }
+
+  for (let i = 0; i < count; i++) {
+    const side = i % 2 === 0 ? -1 : 1;
+    const layer = Math.floor(i / 2);
+
+    let x = 0;
+    let y = 0;
+    let angle = 0;
+
+    if (/wing|翅膀|翅/.test(name)) {
+      x = side * item.w * 0.46;
+      y = -item.h * 0.12 +
+        layer * item.h * 0.10;
+      angle = side * 0.15;
+
+    } else if (/horn|角/.test(name)) {
+      x = (
+        i - (count - 1) / 2
+      ) * Math.min(
+        22, item.w / (count + 1)
+      );
+      y = -item.h * 0.52;
+
+    } else if (/tail|尾巴/.test(name)) {
+      x = item.w * 0.46;
+      y = item.h * 0.10 + i * 6;
+
+    } else if (/tentacle|觸手/.test(name)) {
+      x = (
+        i - (count - 1) / 2
+      ) * Math.min(
+        16, item.w / (count + 1)
+      );
+      y = item.h * 0.48;
+
+    } else {
+      const a = TWO_PI * i / count;
+      x = Math.cos(a) * item.w * 0.46;
+      y = Math.sin(a) * item.h * 0.46;
+      angle = a;
+    }
+
+    const phase = worldTime * 5 + i * 0.5;
+
+    if (motion === "flap") {
+      angle += side * Math.sin(phase) * 0.25;
+    } else if (
+      motion === "wave" ||
+      motion === "swing"
+    ) {
+      angle += Math.sin(phase) * 0.18;
+    } else if (motion === "rotate") {
+      angle += worldTime;
+    } else if (motion === "bounce") {
+      y -= Math.abs(Math.sin(phase)) * 8;
+    }
+
+    const pulse =
+      motion === "pulse"
+        ? 1 + Math.sin(phase) * 0.08
+        : 1;
+
+    push();
+
+    translate(x, y);
+    rotate(angle);
+
+    if (
+      /wing|翅膀|翅/.test(name) &&
+      side === 1
+    ) {
+      scale(-1, 1);
+    }
+
+    scale(bpScale * pulse);
+
+    drawGrid();
+
+    pop();
+  }
+}
+
   function drawFeature(feature, item) {
+    if (
+  feature.plusBlueprint &&
+  feature.plusBlueprint.success === true
+) {
+  drawPlusBlueprintFeature(feature, item);
+  return;
+}
     const name = safeText(
       feature.feature || feature.description
     ).toLowerCase();
@@ -2433,26 +2590,43 @@ window.performMindspaceAction = function(command) {
     const item = getTarget(operation);
 
     switch (operation.type) {
-      case "appearance": {
-        if (!item) return false;
+     
+case "appearance": {
+  if (!item) return false;
 
-        prepareItem(item);
+  prepareItem(item);
 
-        item.aiVisuals.features.push({
-          feature: safeText(operation.feature),
-          description: safeText(operation.description),
-          count: safeNumber(
-            operation.count, 2, 1, 30
-          ),
-          color: safeText(operation.color),
-          placement: safeText(operation.placement)
-        });
+  const bp = operation.plusBlueprint;
 
-        item.aiVisuals.features =
-          item.aiVisuals.features.slice(-20);
+  const validBlueprint = Boolean(
+    bp &&
+    bp.success === true &&
+    Array.isArray(bp.grid) &&
+    bp.grid.length > 0 &&
+    Array.isArray(bp.palette) &&
+    bp.palette.length > 0
+  );
 
-        return true;
-      }
+  item.aiVisuals.features.push({
+    feature: safeText(operation.feature),
+    description: safeText(operation.description),
+    count: safeNumber(
+      operation.count, 2, 1, 30
+    ),
+    color: safeText(operation.color),
+    placement: safeText(operation.placement),
+
+    // 真正保留 OpenAI 產生的積木網格。
+    plusBlueprint: validBlueprint
+      ? bp
+      : null
+  });
+
+  item.aiVisuals.features =
+    item.aiVisuals.features.slice(-20);
+
+  return true;
+}
 
       case "ability": {
         if (!item) return false;
