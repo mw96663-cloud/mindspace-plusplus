@@ -1,3 +1,4 @@
+
 <!-- Mindspace Pages redeploy 2026-11-01 -->
 <!DOCTYPE html>
 <html lang="zh-Hant">
@@ -435,16 +436,15 @@ section h2 {
     class="floatButton primary"
     title="工作台"
   >🧺</button>
-  
-<button
-  id="bubbleFullscreen"
-  class="floatButton"
-  type="button"
-  title="切換全螢幕"
-  aria-label="進入全螢幕"
-  aria-pressed="false"
->⛶</button>
 
+  <button
+    id="bubbleFullscreen"
+    class="floatButton"
+    type="button"
+    title="切換全螢幕"
+    aria-label="進入全螢幕"
+    aria-pressed="false"
+  >⛶</button>
 </nav>
 
 <aside id="sidebar">
@@ -1938,16 +1938,15 @@ $("analyzeCreationAI").onclick = async () => {
 };
 
 /* =====================================================
-   10｜確認 AI 分類
+   10｜確認 AI 分類＋Environment 自動背景
 ===================================================== */
 
-$("confirmClassification").onclick = () => {
+$("confirmClassification").onclick = async () => {
   if (analyzing) return;
 
   if (!selectedType) {
     $("classificationMessage").textContent =
       "請先選擇角色或環境。";
-
     return;
   }
 
@@ -1961,35 +1960,128 @@ $("confirmClassification").onclick = () => {
   ) {
     $("classificationMessage").textContent =
       "sketch.js 尚未支援角色／環境分類。";
-
     return;
   }
 
+  // 保存這一次的作品資訊，避免後續拍攝
+  // 新作品時改變全域 latestCreationId。
+  const creationId = latestCreationId;
+  const creationType = selectedType;
+  const suggestion = aiSuggestion;
+
   const success =
     window.applyMindspaceClassification(
-      latestCreationId,
-      selectedType,
+      creationId,
+      creationType,
       description,
-      aiSuggestion
+      suggestion
     );
 
   if (!success) {
     $("classificationMessage").textContent =
       "找不到對應的積木作品。";
-
     return;
   }
 
   stopCreationVoice(true);
   closeModal("classificationModal");
 
+  updateCommandSelection();
+
+  if (creationType === "character") {
+    say("你的角色開始探索世界了！");
+    return;
+  }
+
+  // Environment 原始積木已經由
+  // applyMindspaceClassification 加入環境。
+  // 不等待 AI 背景生成。
   say(
-    selectedType === "character"
-      ? "你的角色開始探索世界了！"
-      : "你的環境已經延伸到 Mindspace！"
+    "你的積木環境已經加入世界！正在延伸想像世界……"
   );
 
-  updateCommandSelection();
+  const identity =
+    suggestion?.name ||
+    description ||
+    "孩子創造的積木環境";
+
+  const worldDescription = [
+    "Create a beautiful, full-screen Plus-Plus",
+    "construction toy world.",
+    "",
+    "The world must grow from a child's",
+    "original Plus-Plus brick creation.",
+    "",
+    "Original creation:",
+    identity,
+    "",
+    "Child's description:",
+    description || identity,
+    "",
+    "Everything in the scene should be built",
+    "from colorful, interlocking Plus-Plus",
+    "shaped plastic bricks.",
+    "",
+    "Expand the imagined environment",
+    "naturally toward all four edges.",
+    "",
+    "Create rich depth, architecture,",
+    "terrain, lighting and atmosphere.",
+    "",
+    "The original photographed creation",
+    "will remain separately in the",
+    "interactive p5.js foreground.",
+    "",
+    "Do not reproduce the original object",
+    "as a large central duplicate.",
+    "",
+    "No words, no captions, no UI.",
+    "",
+    "The child's imagination is the",
+    "creative authority."
+  ].join("\n");
+
+  if (
+    typeof window.generateMindspaceWorldAI !==
+    "function"
+  ) {
+    console.error(
+      "[Mindspace] AI 背景生成模組尚未載入"
+    );
+
+    say(
+      "積木環境已保留，但背景功能尚未準備好。"
+    );
+
+    return;
+  }
+
+  try {
+    const generated =
+      await window.generateMindspaceWorldAI(
+        worldDescription
+      );
+
+    if (generated === true) {
+      say(
+        "你的 Plus-Plus 世界已經長大了！"
+      );
+    } else {
+      say(
+        "積木環境已經保留，可以稍後再生成背景。"
+      );
+    }
+
+  } catch (error) {
+    console.error(
+      "[Mindspace] Environment 背景生成失敗",
+      error
+    );
+
+    say(
+      "積木環境已加入世界，但背景延伸沒有完成。"
+    );
+  }
 };
 
 $("skipClassification").onclick = () => {
@@ -2256,8 +2348,7 @@ function getSelectedMindspaceItem() {
     return window.getSelectedMindspaceCreation();
   }
 
-  const id =
-    window.mindspaceSelectedId;
+  const id = window.mindspaceSelectedId;
 
   return (
     window.mindspaceCreations || []
@@ -2265,16 +2356,12 @@ function getSelectedMindspaceItem() {
 }
 
 function updateCommandSelection() {
-  const item =
-    getSelectedMindspaceItem();
-
-  const element =
-    $("mindspaceCommandSelection");
+  const item = getSelectedMindspaceItem();
+  const element = $("mindspaceCommandSelection");
 
   if (!item) {
     element.textContent =
       "🎯 請先選取世界中的角色";
-
     return;
   }
 
@@ -2299,13 +2386,8 @@ window.addEventListener(
 
 let mindspaceCommandBusy = false;
 
-function setCommandStatus(
-  message,
-  kind = ""
-) {
-  const element =
-    $("mindspaceCommandStatus");
-
+function setCommandStatus(message, kind = "") {
+  const element = $("mindspaceCommandStatus");
   element.textContent = message;
   element.className = kind;
 }
@@ -2363,30 +2445,23 @@ function getMindspaceContext() {
     elements: zone.elements || []
   }));
 
-  return {
-    creations,
-    worlds
-  };
+  return { creations, worlds };
 }
 
 /* =====================================================
    16｜真實 OpenAI 指令
 ===================================================== */
 
-async function submitMindspaceCommand(
-  inputText
-) {
+async function submitMindspaceCommand(inputText) {
   if (mindspaceCommandBusy) return;
 
-  const text =
-    String(inputText || "").trim();
+  const text = String(inputText || "").trim();
 
   if (!text) {
     setCommandStatus(
       "請先輸入想像內容，或使用麥克風說話。",
       "error"
     );
-
     return;
   }
 
@@ -2395,12 +2470,10 @@ async function submitMindspaceCommand(
       "OpenAI Bridge 尚未連線，請稍候或重新連接。",
       "error"
     );
-
     return;
   }
 
-  const context =
-    getMindspaceContext();
+  const context = getMindspaceContext();
 
   if (
     !Array.isArray(context.creations) ||
@@ -2410,15 +2483,11 @@ async function submitMindspaceCommand(
       "世界裡還沒有積木作品，請先拍照創造。",
       "error"
     );
-
     return;
   }
 
-  const selected =
-    getSelectedMindspaceItem();
-
-  const targetId =
-    selected?.id || null;
+  const selected = getSelectedMindspaceItem();
+  const targetId = selected?.id || null;
 
   setCommandBusy(true);
   beginMindspaceCommand();
@@ -2427,9 +2496,7 @@ async function submitMindspaceCommand(
     "正在把你的想像傳給 OpenAI……"
   );
 
-  say(
-    "我正在理解你的想像！"
-  );
+  say("我正在理解你的想像！");
 
   try {
     const result = await requestAI(
@@ -2460,7 +2527,6 @@ async function submitMindspaceCommand(
 
       setCommandStatus(reply);
       say(reply);
-
       return;
     }
 
@@ -2476,7 +2542,6 @@ async function submitMindspaceCommand(
 
       setCommandStatus(reply);
       say(reply);
-
       return;
     }
 
@@ -2511,15 +2576,10 @@ async function submitMindspaceCommand(
       result.reply ||
       "你的想像已經進入 Mindspace！";
 
-    setCommandStatus(
-      reply,
-      "success"
-    );
-
+    setCommandStatus(reply, "success");
     say(reply);
 
     $("chatInput").value = "";
-
     updateCommandSelection();
 
   } catch (error) {
@@ -2531,9 +2591,7 @@ async function submitMindspaceCommand(
       "error"
     );
 
-    say(
-      "這次沒有成功，請再試一次。"
-    );
+    say("這次沒有成功，請再試一次。");
 
   } finally {
     setCommandBusy(false);
@@ -2599,9 +2657,7 @@ function updateCommandMicButtons() {
   );
 }
 
-function stopCommandVoice(
-  cancel = false
-) {
+function stopCommandVoice(cancel = false) {
   if (!commandRecognition) return;
 
   if (cancel) {
@@ -2625,8 +2681,6 @@ function startCommandVoice() {
       "目前瀏覽器不支援語音辨識，請使用 Chrome、Edge 或文字輸入。",
       "error"
     );
-
-   
     return;
   }
 
@@ -2637,8 +2691,6 @@ function startCommandVoice() {
       "請先拍照創造積木作品。",
       "error"
     );
-
-  
     return;
   }
 
@@ -2661,18 +2713,14 @@ function startCommandVoice() {
 
   recognition.onstart = () => {
     commandListening = true;
-
     updateCommandMicButtons();
-
     beginMindspaceCommand();
 
     setCommandStatus(
       "🎙️ 正在聆聽你的想像……"
     );
 
-    say(
-      "我正在聽你的想像！"
-    );
+    say("我正在聽你的想像！");
   };
 
   recognition.onresult = event => {
@@ -2784,24 +2832,20 @@ function startCommandVoice() {
 $("micButton").onclick =
   startCommandVoice;
 
-
 $("bubbleMic").onclick = () => {
   const classificationOpen =
     !$("classificationModal")
       .classList.contains("hidden");
 
-  // 正在辨識新作品時，使用作品描述語音
   if (classificationOpen) {
     startCreationVoice();
     return;
   }
 
-  // 一般情況直接使用自由語音
-  // 不開啟工作台
+  // 不開啟工作台，直接聆聽孩子的指令
   updateCommandSelection();
   startCommandVoice();
 };
-
 
 /* =====================================================
    20｜初始化
@@ -2815,14 +2859,6 @@ connectBridge();
 
 /* =====================================================
    21｜AI 滿版背景生成控制
-   Mindspace Plus-Plus
-
-   保留原本的：
-   - 拍照與 AI 去背
-   - 作品分類
-   - 語音與文字指令
-   - 多角色共存
-   - p5.js 互動
 ===================================================== */
 
 (function () {
@@ -2830,10 +2866,6 @@ connectBridge();
 
   let backgroundBusy = false;
 
-  /*
-   * 建立背景生成控制區
-   * 放在 STEP 06 裡面。
-   */
   const panel =
     document.getElementById(
       "mindspaceCommandPanel"
@@ -2927,7 +2959,10 @@ connectBridge();
       "mindspaceBackgroundStatus"
     );
 
-  function updateStatus(message, error = false) {
+  function updateStatus(
+    message,
+    error = false
+  ) {
     status.textContent = message;
 
     status.style.background =
@@ -2937,10 +2972,6 @@ connectBridge();
       error ? "#a2382c" : "#25374e";
   }
 
-  /*
-   * 透過原本的 GAS Bridge
-   * 呼叫真正的 OpenAI 圖片生成。
-   */
   async function generateBackground(description) {
     const text =
       String(description || "").trim();
@@ -2954,6 +2985,9 @@ connectBridge();
     }
 
     if (backgroundBusy) {
+      updateStatus(
+        "另一個背景正在生成，請稍候。"
+      );
       return false;
     }
 
@@ -2984,10 +3018,6 @@ connectBridge();
     );
 
     try {
-      /*
-       * 真實 OpenAI 呼叫
-       * 由 Code.gs 生成 PNG。
-       */
       const result = await requestAI(
         "generateWorldBackgroundAI",
         {
@@ -3017,10 +3047,6 @@ connectBridge();
         "AI 已生成圖片，正在載入互動世界……"
       );
 
-      /*
-       * 將 AI 背景交給 sketch.js。
-       * 不會清空原本角色。
-       */
       const loaded =
         await window.setMindspaceAIBackground(
           result.image,
@@ -3034,8 +3060,7 @@ connectBridge();
       }
 
       updateStatus(
-        "✨ 你的想像世界已經生成！" +
-        "\n" +
+        "✨ 你的想像世界已經生成！\n" +
         "原本的積木角色會繼續生活在世界裡。"
       );
 
@@ -3043,9 +3068,7 @@ connectBridge();
 
     } catch (error) {
       const message =
-        error && error.message
-          ? error.message
-          : String(error);
+        error?.message || String(error);
 
       console.error(
         "[Mindspace] AI 背景生成失敗",
@@ -3065,9 +3088,6 @@ connectBridge();
     }
   }
 
-  /*
-   * 手動生成背景
-   */
   generateButton.addEventListener(
     "click",
     () => {
@@ -3075,10 +3095,6 @@ connectBridge();
     }
   );
 
-  /*
-   * 恢復原本的 p5.js 世界
-   * 不刪除 AI 圖片或任何角色。
-   */
   restoreButton.addEventListener(
     "click",
     () => {
@@ -3095,10 +3111,6 @@ connectBridge();
     }
   );
 
-  /*
-   * 提供其他模組使用。
-   * 後續語音與分類系統可呼叫。
-   */
   window.generateMindspaceWorldAI =
     generateBackground;
 
@@ -3108,14 +3120,16 @@ connectBridge();
 })();
 
 /* =====================================================
-   MINDSPACE｜全螢幕泡泡按鈕
+   22｜全螢幕泡泡按鈕
 ===================================================== */
 
 (function () {
   "use strict";
 
   const button =
-    document.getElementById("bubbleFullscreen");
+    document.getElementById(
+      "bubbleFullscreen"
+    );
 
   if (!button) {
     console.error(
@@ -3164,11 +3178,9 @@ connectBridge();
           error
         );
 
-        if (typeof say === "function") {
-          say(
-            "無法切換全螢幕，請確認瀏覽器權限。"
-          );
-        }
+        say(
+          "無法切換全螢幕，請確認瀏覽器權限。"
+        );
       }
     }
   );
