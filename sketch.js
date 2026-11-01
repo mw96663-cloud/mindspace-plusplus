@@ -4225,6 +4225,349 @@ case "appearance": {
   );
 })();
 
+/* =========================================================
+   MINDSPACE｜OPENAI IMAGE ACCESSORY RENDERER V1
+
+   真實 OpenAI PNG 配件附著系統
+
+   - 保留孩子原始積木 PNG
+   - 每個角色有獨立 AI 配件
+   - 可指定 1～30 個配件
+   - 翅膀拍動、其他配件跟隨角色
+   - 不修改原本 AI operations
+   ========================================================= */
+
+(function () {
+  "use strict";
+
+  const MAX_ACCESSORIES = 20;
+
+  function getCharacter(id) {
+    return creations.find(item => item.id === id);
+  }
+
+  function loadAccessoryImage(dataURL) {
+    return new Promise((resolve, reject) => {
+      if (
+        typeof dataURL !== "string" ||
+        !dataURL.startsWith(
+          "data:image/png;base64,"
+        )
+      ) {
+        reject(new Error("無效的 AI PNG"));
+        return;
+      }
+
+      loadImage(
+        dataURL,
+        image => resolve(image),
+        () => reject(
+          new Error("AI 配件圖片載入失敗")
+        )
+      );
+    });
+  }
+
+  function isWing(feature) {
+    return /wing|翅|翼/i.test(
+      String(feature || "")
+    );
+  }
+
+  function isTail(feature) {
+    return /tail|尾巴|尾翼/i.test(
+      String(feature || "")
+    );
+  }
+
+  function isHorn(feature) {
+    return /horn|角/i.test(
+      String(feature || "")
+    );
+  }
+
+  function getAccessoryPosition(
+    accessory,
+    item,
+    index
+  ) {
+    const count = accessory.count;
+
+    const feature = accessory.feature;
+
+    if (isWing(feature)) {
+      const side =
+        index % 2 === 0 ? -1 : 1;
+
+      const layer = Math.floor(index / 2);
+
+      const layers = Math.ceil(count / 2);
+
+      const spread =
+        layer - (layers - 1) / 2;
+
+      return {
+        x: side * item.w * .47,
+        y: spread * item.h * .17,
+        angle:
+          side * (
+            .18 +
+            Math.sin(
+              worldTime * 6.5 +
+              layer * .7
+            ) * .28
+          ),
+        mirror: side === 1,
+        width: item.w * .42,
+        height: item.h * .55
+      };
+    }
+
+    if (isHorn(feature)) {
+      const gap =
+        item.w * .18;
+
+      return {
+        x:
+          (index - (count - 1) / 2) *
+          gap,
+        y: -item.h * .48,
+        angle: 0,
+        mirror: false,
+        width: item.w * .22,
+        height: item.h * .35
+      };
+    }
+
+    if (isTail(feature)) {
+      return {
+        x: item.w * .48,
+        y:
+          (index - (count - 1) / 2) *
+          item.h * .12,
+        angle:
+          Math.sin(
+            worldTime * 4 + index
+          ) * .20,
+        mirror: false,
+        width: item.w * .38,
+        height: item.h * .35
+      };
+    }
+
+    const angle =
+      TWO_PI * index / count;
+
+    return {
+      x: Math.cos(angle) *
+        item.w * .48,
+      y: Math.sin(angle) *
+        item.h * .48,
+      angle: angle,
+      mirror: false,
+      width: item.w * .28,
+      height: item.h * .28
+    };
+  }
+
+  function drawAccessory(
+    accessory,
+    item
+  ) {
+    if (!accessory.image) return;
+
+    const count = Math.max(
+      1,
+      Math.min(30, accessory.count)
+    );
+
+    for (let i = 0; i < count; i++) {
+      const position =
+        getAccessoryPosition(
+          accessory,
+          item,
+          i
+        );
+
+      push();
+
+      translate(
+        position.x,
+        position.y
+      );
+
+      rotate(position.angle);
+
+      if (position.mirror) {
+        scale(-1, 1);
+      }
+
+      const pulse =
+        isWing(accessory.feature)
+          ? 1 + Math.sin(
+              worldTime * 6 + i
+            ) * .045
+          : 1;
+
+      scale(pulse);
+
+      imageMode(CENTER);
+
+      image(
+        accessory.image,
+        0,
+        0,
+        position.width,
+        position.height
+      );
+
+      pop();
+    }
+  }
+
+  function drawAllAIAccessories(item) {
+    const accessories =
+      item.mindspaceAIAccessories;
+
+    if (
+      !Array.isArray(accessories) ||
+      accessories.length === 0
+    ) {
+      return;
+    }
+
+    push();
+
+    translate(item.x, item.y);
+
+    for (const accessory of accessories) {
+      drawAccessory(accessory, item);
+    }
+
+    pop();
+  }
+
+  // 公開給 index.html 呼叫。
+  window.addMindspaceAIAccessory =
+    async function (data) {
+
+    const targetId = String(
+      data?.targetId ||
+      window.mindspaceSelectedId ||
+      ""
+    );
+
+    const item = getCharacter(targetId);
+
+    if (!item) {
+      throw new Error(
+        "找不到要附加 AI 配件的角色"
+      );
+    }
+
+    const png = data?.image;
+
+    const accessoryImage =
+      await loadAccessoryImage(png);
+
+    if (!Array.isArray(
+      item.mindspaceAIAccessories
+    )) {
+      item.mindspaceAIAccessories = [];
+    }
+
+    const accessory = {
+      id:
+        "ai-accessory-" +
+        Date.now() + "-" +
+        Math.random().toString(36).slice(2),
+
+      feature: String(
+        data.feature || "accessory"
+      ),
+
+      description: String(
+        data.description || ""
+      ),
+
+      count: Math.max(
+        1,
+        Math.min(
+          30,
+          Math.round(
+            Number(data.count) || 1
+          )
+        )
+      ),
+
+      image: accessoryImage,
+
+      model: String(
+        data.model || "unknown"
+      ),
+
+      createdAt: Date.now()
+    };
+
+    item.mindspaceAIAccessories.push(
+      accessory
+    );
+
+    if (
+      item.mindspaceAIAccessories.length >
+      MAX_ACCESSORIES
+    ) {
+      item.mindspaceAIAccessories.shift();
+    }
+
+    console.log(
+      "[Mindspace] OpenAI 配件已附著",
+      {
+        targetId,
+        feature: accessory.feature,
+        count: accessory.count,
+        model: accessory.model
+      }
+    );
+
+    window.dispatchEvent(
+      new CustomEvent(
+        "mindspace:ai-accessory-added",
+        {
+          detail: {
+            targetId,
+            feature: accessory.feature,
+            count: accessory.count,
+            model: accessory.model
+          }
+        }
+      )
+    );
+
+    return {
+      success: true,
+      targetId,
+      accessoryId: accessory.id,
+      count: accessory.count
+    };
+  };
+
+  // 包裝目前最終版本的 drawCreation，
+  // 不取代既有角色、技能或積木藍圖繪製。
+  const previousDrawCreation =
+    drawCreation;
+
+  drawCreation = function (item) {
+    drawAllAIAccessories(item);
+
+    previousDrawCreation(item);
+  };
+
+  console.log(
+    "[Mindspace] OpenAI PNG 配件渲染器已啟動"
+  );
+})();
+
   console.log(
     "[Mindspace] AI Plus-Plus Blueprint Renderer 已載入"
   );
