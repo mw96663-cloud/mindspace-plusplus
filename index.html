@@ -5099,5 +5099,570 @@ stopButton.onclick = stopGuide;
 })();
 </script>
 
+<script>
+/* =====================================================
+   MINDSPACE｜CHILD MANUAL ACCESSORY EDITOR V4
+===================================================== */
+
+(function () {
+  "use strict";
+
+  const oldApply =
+    window.applyMindspaceAIOperations;
+
+  let editorBusy = false;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    #manualAccessoryEditor {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: none;
+      background: rgba(10,25,45,.88);
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+    }
+
+    #manualAccessoryEditor.active {
+      display: flex;
+    }
+
+    #manualAccessoryPanel {
+      width: min(720px,100%);
+      max-height: 96vh;
+      overflow: auto;
+      padding: 18px;
+      border-radius: 20px;
+      background: white;
+      color: #25374e;
+    }
+
+    #manualAccessoryStage {
+      position: relative;
+      width: 100%;
+      height: min(48vh,420px);
+      overflow: hidden;
+      border-radius: 15px;
+      background:
+        linear-gradient(45deg,#e7edf4 25%,transparent 25%),
+        linear-gradient(-45deg,#e7edf4 25%,transparent 25%),
+        #f8fbff;
+      background-size: 24px 24px;
+      touch-action: none;
+    }
+
+    #manualAccessoryCharacter {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%,-50%);
+      max-width: 48%;
+      max-height: 65%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+
+    .manualAccessoryPart {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      object-fit: contain;
+      touch-action: none;
+      cursor: grab;
+      user-select: none;
+      transform-origin: center;
+    }
+
+    .manualAccessoryPart.selected {
+      outline: 2px dashed #3974c5;
+      outline-offset: 5px;
+    }
+
+    #manualAccessoryPanel input[type=range] {
+      width: 100%;
+    }
+
+    #manualAccessoryPanel button {
+      padding: 11px 14px;
+      margin: 5px 3px;
+      border-radius: 10px;
+      background: #e4effb;
+      color: #25374e;
+    }
+
+    #manualAccessoryPanel .confirm {
+      background: #ffcf5d;
+      font-weight: bold;
+    }
+  `;
+  document.head.appendChild(style);
+
+  const root = document.createElement("div");
+  root.id = "manualAccessoryEditor";
+
+  root.innerHTML = `
+    <div id="manualAccessoryPanel">
+      <h2>✨ 自己決定造型長在哪裡</h2>
+      <p id="manualAccessoryMessage">
+        拖曳配件到角色身上。
+      </p>
+
+      <div id="manualAccessoryStage">
+        <img id="manualAccessoryCharacter"
+             alt="原始積木角色">
+      </div>
+
+      <p>點選要調整的配件，再修改大小和角度。</p>
+
+      <label>
+        配件大小
+        <input id="manualAccessoryScale"
+               type="range"
+               min="20"
+               max="200"
+               value="75">
+      </label>
+
+      <label>
+        旋轉角度
+        <input id="manualAccessoryAngle"
+               type="range"
+               min="-180"
+               max="180"
+               value="0">
+      </label>
+
+      <div>
+        <button id="manualAccessoryReset">
+          重設位置
+        </button>
+        <button id="manualAccessoryCancel">
+          取消
+        </button>
+        <button id="manualAccessoryConfirm"
+                class="confirm">
+          ✓ 確認附著
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(root);
+
+  const stage = document.getElementById(
+    "manualAccessoryStage"
+  );
+
+  const characterImg = document.getElementById(
+    "manualAccessoryCharacter"
+  );
+
+  const scaleInput = document.getElementById(
+    "manualAccessoryScale"
+  );
+
+  const angleInput = document.getElementById(
+    "manualAccessoryAngle"
+  );
+
+  const message = document.getElementById(
+    "manualAccessoryMessage"
+  );
+
+  let activeParts = [];
+  let selectedIndex = 0;
+  let finishEditor = null;
+
+  function renderParts() {
+    stage.querySelectorAll(
+      ".manualAccessoryPart"
+    ).forEach(el => el.remove());
+
+    activeParts.forEach((part, index) => {
+      const img = document.createElement("img");
+
+      img.src = part.image;
+      img.className =
+        "manualAccessoryPart" +
+        (index === selectedIndex ? " selected" : "");
+
+      img.draggable = false;
+
+      const update = () => {
+        img.style.left = part.x + "px";
+        img.style.top = part.y + "px";
+
+        img.style.width =
+          part.scale + "px";
+
+        img.style.height =
+          part.scale * part.ratio + "px";
+
+        img.style.transform =
+          "translate(-50%,-50%) rotate(" +
+          part.angle + "deg)";
+      };
+
+      img.addEventListener(
+        "pointerdown",
+        event => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          selectedIndex = index;
+
+          scaleInput.value = part.scale;
+          angleInput.value = part.angle;
+
+          img.setPointerCapture(event.pointerId);
+
+          const rect =
+            stage.getBoundingClientRect();
+
+          const move = e => {
+            part.x = Math.max(
+              0,
+              Math.min(rect.width, e.clientX - rect.left)
+            );
+
+            part.y = Math.max(
+              0,
+              Math.min(rect.height, e.clientY - rect.top)
+            );
+
+            update();
+          };
+
+          move(event);
+
+          img.addEventListener(
+            "pointermove",
+            move
+          );
+
+          img.addEventListener(
+            "pointerup",
+            () => {
+              img.removeEventListener(
+                "pointermove",
+                move
+              );
+              renderParts();
+            },
+            {once: true}
+          );
+
+          renderSelection();
+        }
+      );
+
+      stage.appendChild(img);
+      update();
+    });
+  }
+
+  function renderSelection() {
+    stage.querySelectorAll(
+      ".manualAccessoryPart"
+    ).forEach((el, i) => {
+      el.classList.toggle(
+        "selected",
+        i === selectedIndex
+      );
+    });
+  }
+
+  scaleInput.addEventListener("input", () => {
+    const part = activeParts[selectedIndex];
+    if (!part) return;
+
+    part.scale = Number(scaleInput.value);
+    renderParts();
+  });
+
+  angleInput.addEventListener("input", () => {
+    const part = activeParts[selectedIndex];
+    if (!part) return;
+
+    part.angle = Number(angleInput.value);
+    renderParts();
+  });
+
+  function closeEditor(result) {
+    root.classList.remove("active");
+
+    const done = finishEditor;
+    finishEditor = null;
+
+    if (done) done(result);
+  }
+
+  document.getElementById(
+    "manualAccessoryCancel"
+  ).onclick = () => closeEditor(null);
+
+  document.getElementById(
+    "manualAccessoryReset"
+  ).onclick = () => {
+    const rect = stage.getBoundingClientRect();
+
+    activeParts.forEach((part, index) => {
+      part.x = rect.width / 2 +
+        (index % 3 - 1) * 60;
+
+      part.y = rect.height / 2 -
+        80 + Math.floor(index / 3) * 40;
+
+      part.scale = 75;
+      part.angle = 0;
+    });
+
+    selectedIndex = 0;
+    scaleInput.value = 75;
+    angleInput.value = 0;
+    renderParts();
+  };
+
+  document.getElementById(
+    "manualAccessoryConfirm"
+  ).onclick = () => {
+    const rect = stage.getBoundingClientRect();
+    const target = characterImg.getBoundingClientRect();
+
+    if (!target.width || !target.height) {
+      message.textContent = "角色圖片尚未載入。";
+      return;
+    }
+
+    const centerX =
+      target.left - rect.left + target.width / 2;
+
+    const centerY =
+      target.top - rect.top + target.height / 2;
+
+    const parts = activeParts.map(part => ({
+      x: (part.x - centerX) / target.width,
+      y: (part.y - centerY) / target.height,
+      scale: part.scale / target.width,
+      angle: part.angle * Math.PI / 180
+    }));
+
+    closeEditor(parts);
+  };
+
+  function openAccessoryEditor(
+    target,
+    image,
+    count
+  ) {
+    return new Promise(async resolve => {
+      const preview = new Image();
+      preview.src = image;
+
+      try {
+        await preview.decode();
+      } catch {
+        resolve(null);
+        return;
+      }
+
+      characterImg.src = target.originalPNG;
+
+      try {
+        await characterImg.decode();
+      } catch {
+        resolve(null);
+        return;
+      }
+
+      root.classList.add("active");
+      finishEditor = resolve;
+
+      const rect = stage.getBoundingClientRect();
+
+      const ratio =
+        preview.naturalHeight /
+        Math.max(1, preview.naturalWidth);
+
+      activeParts = Array.from(
+        {length: count},
+        (_, index) => ({
+          image,
+          ratio,
+          x: rect.width / 2 +
+            (index % 3 - 1) * 60,
+          y: rect.height / 2 -
+            80 + Math.floor(index / 3) * 40,
+          scale: 75,
+          angle: 0
+        })
+      );
+
+      selectedIndex = 0;
+      scaleInput.value = 75;
+      angleInput.value = 0;
+
+      message.textContent =
+        "共有 " + count +
+        " 個配件，請逐一拖曳到你想要的位置。";
+
+      renderParts();
+    });
+  }
+
+  async function generateManualAccessory(operation) {
+    const all = window.mindspaceCreations || [];
+
+    const id =
+      operation.targetId ||
+      window.mindspaceSelectedId;
+
+    const target = all.find(
+      item => String(item.id) === String(id)
+    );
+
+    if (!target || target.kind !== "character") {
+      throw new Error("請先選取一個積木角色");
+    }
+
+    const count = Math.max(
+      1,
+      Math.min(
+        30,
+        Math.round(Number(operation.count) || 1)
+      )
+    );
+
+    const feature = String(
+      operation.feature || "accessory"
+    );
+
+    const description = String(
+      operation.description ||
+      operation.appearance ||
+      feature
+    );
+
+    const response = await requestAI(
+      "generatePlusPlusAccessoryPlacedAI",
+      {
+        targetId: target.id,
+        description,
+        accessory: feature,
+        color: operation.color || "colorful",
+        count
+      },
+      240000
+    );
+
+    if (
+      !response ||
+      response.success !== true ||
+      response.provider !== "OpenAI" ||
+      typeof response.image !== "string" ||
+      !response.image.startsWith(
+        "data:image/png;base64,"
+      )
+    ) {
+      throw new Error(
+        "OpenAI 沒有回傳真正的配件 PNG"
+      );
+    }
+
+    const parts = await openAccessoryEditor(
+      target,
+      response.image,
+      count
+    );
+
+    if (!parts) {
+      throw new Error("孩子已取消配件放置");
+    }
+
+    return window.attachMindspaceManualAccessory({
+      targetId: target.id,
+      image: response.image,
+      feature,
+      parts
+    });
+  }
+
+  window.applyMindspaceAIOperations =
+    async function(operations) {
+
+      if (editorBusy) {
+        return {
+          success: false,
+          applied: 0,
+          failed: 1,
+          errors: ["配件工作台正在使用中"]
+        };
+      }
+
+      const appearances = operations.filter(
+        op => op && op.type === "appearance"
+      );
+
+      if (!appearances.length) {
+        return oldApply(operations);
+      }
+
+      const others = operations.filter(
+        op => op && op.type !== "appearance"
+      );
+
+      let applied = 0;
+      let failed = 0;
+      const errors = [];
+
+      editorBusy = true;
+
+      try {
+        for (const op of appearances) {
+          try {
+            await generateManualAccessory(op);
+            applied++;
+          } catch (error) {
+            failed++;
+            errors.push(error.message);
+          }
+        }
+
+        if (others.length) {
+          const result = await oldApply(others);
+
+          applied += Number(
+            result?.applied || 0
+          );
+
+          failed += Number(
+            result?.failed || 0
+          );
+
+          if (Array.isArray(result?.errors)) {
+            errors.push(...result.errors);
+          }
+        }
+
+      } finally {
+        editorBusy = false;
+      }
+
+      return {
+        success: failed === 0,
+        applied,
+        failed,
+        errors
+      };
+    };
+
+  console.log(
+    "[Mindspace] 兒童自由放置配件 V4 已啟動"
+  );
+})();
+</script>
+
 </body>
 </html>
