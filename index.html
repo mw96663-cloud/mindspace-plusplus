@@ -1169,6 +1169,604 @@ $("micButton").onclick = () => {
 connectBridge();
 </script>
 
+
 <script src="./sketch.js"></script>
+
+<!-- ======================================================
+     Mindspace Plus-Plus
+     STEP 06｜文字＋語音 AI 自由創造
+     使用現有 requestAI 與 Google Apps Script Bridge
+====================================================== -->
+<script>
+(function () {
+  "use strict";
+
+  const $command = id => document.getElementById(id);
+
+  let commandBusy = false;
+  let commandListening = false;
+  let commandRecognition = null;
+  let commandTranscript = "";
+  let commandVoiceError = false;
+
+  const Recognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+  /* ---------------------------------------
+     01｜建立指令介面
+  --------------------------------------- */
+
+  const chatInput = $command("chatInput");
+  const micButton = $command("micButton");
+  const bubbleMic = $command("bubbleMic");
+
+  const commandSend = document.createElement("button");
+  commandSend.id = "mindspaceCommandSend";
+  commandSend.className = "action primary";
+  commandSend.textContent = "✨ 讓我的想像成真";
+
+  const commandStatus = document.createElement("div");
+  commandStatus.id = "mindspaceCommandStatus";
+  commandStatus.setAttribute("aria-live", "polite");
+  commandStatus.style.cssText = [
+    "margin-top:10px",
+    "padding:12px",
+    "border-radius:12px",
+    "background:#f1f5f9",
+    "color:#34465e",
+    "font-size:13px",
+    "line-height:1.7",
+    "white-space:pre-wrap",
+    "overflow-wrap:anywhere"
+  ].join(";");
+
+  const commandSelection = document.createElement("div");
+  commandSelection.id = "mindspaceCommandSelection";
+  commandSelection.style.cssText = [
+    "margin-bottom:10px",
+    "font-size:13px",
+    "color:#596c83"
+  ].join(";");
+
+  chatInput.parentNode.insertBefore(
+    commandSelection,
+    chatInput
+  );
+
+  micButton.parentNode.insertBefore(
+    commandSend,
+    micButton.nextSibling
+  );
+
+  commandSend.parentNode.insertBefore(
+    commandStatus,
+    commandSend.nextSibling
+  );
+
+  micButton.textContent = "🎙️ 說出我的想像";
+
+  commandStatus.textContent =
+    "先點選世界中的角色，再輸入文字或使用語音。";
+
+  /* ---------------------------------------
+     02｜角色選取
+  --------------------------------------- */
+
+  function getSelectedItem() {
+    if (
+      typeof window.getSelectedMindspaceCreation ===
+      "function"
+    ) {
+      return window.getSelectedMindspaceCreation();
+    }
+
+    const id = window.mindspaceSelectedId;
+
+    return (
+      window.mindspaceCreations || []
+    ).find(item => item.id === id) || null;
+  }
+
+  function getSelectedId() {
+    return getSelectedItem()?.id || null;
+  }
+
+  function updateSelectionLabel() {
+    const item = getSelectedItem();
+
+    if (!item) {
+      commandSelection.textContent =
+        "尚未選取角色，請先點選畫面中的積木。";
+      return;
+    }
+
+    const name =
+      item.name ||
+      item.identity ||
+      item.description ||
+      "我的積木作品";
+
+    commandSelection.textContent =
+      "🎯 目前選取：" + name;
+  }
+
+  window.addEventListener(
+    "mindspace:selection",
+    updateSelectionLabel
+  );
+
+  updateSelectionLabel();
+
+  /* ---------------------------------------
+     03｜黃色選取圓圈控制
+  --------------------------------------- */
+
+  function beginCommand() {
+    if (
+      typeof window.startMindspaceCommand ===
+      "function"
+    ) {
+      window.startMindspaceCommand();
+    }
+  }
+
+  function endCommand() {
+    if (
+      typeof window.finishMindspaceCommand ===
+      "function"
+    ) {
+      window.finishMindspaceCommand();
+    }
+  }
+
+  /* ---------------------------------------
+     04｜取得世界資訊
+  --------------------------------------- */
+
+  function getWorldContext() {
+    if (
+      typeof window.getMindspaceWorldState ===
+      "function"
+    ) {
+      return window.getMindspaceWorldState();
+    }
+
+    const creations = (
+      window.mindspaceCreations || []
+    ).map(item => ({
+      id: item.id,
+      kind: item.kind,
+      name: item.name || "",
+      identity: item.identity || "",
+      description: item.description || "",
+      movement: item.movement || "float",
+      abilities: item.abilities || [],
+      worldType: item.worldType || ""
+    }));
+
+    const worlds = (
+      window.mindspaceWorldZones || []
+    ).map(zone => ({
+      id: zone.id,
+      type: zone.type,
+      elements: zone.elements || []
+    }));
+
+    return { creations, worlds };
+  }
+
+  /* ---------------------------------------
+     05｜更新操作狀態
+  --------------------------------------- */
+
+  function setCommandStatus(message, error = false) {
+    commandStatus.textContent = message;
+
+    commandStatus.style.background =
+      error ? "#fff0ec" : "#f1f5f9";
+
+    commandStatus.style.color =
+      error ? "#a2382c" : "#34465e";
+  }
+
+  function setBusy(value) {
+    commandBusy = value;
+
+    commandSend.disabled = value;
+    micButton.disabled = value;
+
+    commandSend.textContent = value
+      ? "✨ OpenAI 正在理解與創造……"
+      : "✨ 讓我的想像成真";
+  }
+
+  /* ---------------------------------------
+     06｜真正呼叫 OpenAI
+  --------------------------------------- */
+
+  async function submitMindspaceCommand(text) {
+    const instruction = String(text || "").trim();
+
+    if (commandBusy) return;
+
+    if (!instruction) {
+      setCommandStatus(
+        "請先輸入想像內容，或點選麥克風說話。",
+        true
+      );
+      return;
+    }
+
+    const context = getWorldContext();
+    const targetId = getSelectedId();
+
+    if (!context.creations?.length) {
+      setCommandStatus(
+        "世界裡還沒有積木作品，請先拍照創造。",
+        true
+      );
+      return;
+    }
+
+    beginCommand();
+    setBusy(true);
+
+    setCommandStatus(
+      "正在把你的想像傳給 OpenAI……"
+    );
+
+    try {
+      if (typeof requestAI !== "function") {
+        throw new Error(
+          "找不到 OpenAI Bridge 請求功能"
+        );
+      }
+
+      const result = await requestAI(
+        "interpretVoiceCommandAI",
+        {
+          text: instruction,
+          targetId,
+          context
+        },
+        120000
+      );
+
+      if (
+        !result ||
+        result.success !== true ||
+        result.provider !== "OpenAI" ||
+        !result.responseId
+      ) {
+        throw new Error(
+          "OpenAI 未回傳可驗證的指令結果"
+        );
+      }
+
+      if (result.needsClarification) {
+        setCommandStatus(
+          result.reply ||
+          "我還不確定你想修改哪個角色，請先選取角色。"
+        );
+
+        say(
+          result.reply ||
+          "你想修改哪個角色呢？"
+        );
+
+        return;
+      }
+
+      const operations = Array.isArray(
+        result.operations
+      )
+        ? result.operations
+        : [];
+
+      if (operations.length === 0) {
+        setCommandStatus(
+          result.reply ||
+          "AI 已經理解，但沒有產生需要執行的變化。"
+        );
+        return;
+      }
+
+      if (
+        typeof window.applyMindspaceAIOperations !==
+        "function"
+      ) {
+        throw new Error(
+          "sketch.js 尚未載入 AI 指令執行器"
+        );
+      }
+
+      const applied =
+        await window.applyMindspaceAIOperations(
+          operations
+        );
+
+      if (applied === false) {
+        throw new Error(
+          "角色變化沒有成功套用"
+        );
+      }
+
+      const reply =
+        result.reply ||
+        "你的想像已經進入 Mindspace！";
+
+      setCommandStatus(reply);
+      say(reply);
+
+      chatInput.value = "";
+
+    } catch (error) {
+      const message =
+        error?.message || String(error);
+
+      setCommandStatus(
+        "指令沒有完成：" + message,
+        true
+      );
+
+      say(
+        "這次沒有成功，請再試一次。"
+      );
+
+    } finally {
+      setBusy(false);
+      endCommand();
+      updateSelectionLabel();
+    }
+  }
+
+  /* ---------------------------------------
+     07｜文字指令
+  --------------------------------------- */
+
+  commandSend.onclick = () => {
+    submitMindspaceCommand(chatInput.value);
+  };
+
+  chatInput.addEventListener(
+    "keydown",
+    event => {
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !event.isComposing
+      ) {
+        event.preventDefault();
+
+        submitMindspaceCommand(
+          chatInput.value
+        );
+      }
+    }
+  );
+
+  /* ---------------------------------------
+     08｜語音辨識
+     瀏覽器負責語音轉文字
+     OpenAI 負責理解想像指令
+  --------------------------------------- */
+
+  function updateVoiceButton() {
+    micButton.textContent =
+      commandListening
+        ? "⏹️ 結束說話"
+        : "🎙️ 說出我的想像";
+
+    micButton.style.background =
+      commandListening
+        ? "#ffe0d8"
+        : "#e5f1fc";
+
+    micButton.setAttribute(
+      "aria-pressed",
+      String(commandListening)
+    );
+  }
+
+  function stopCommandVoice(cancel = false) {
+    if (!commandRecognition) return;
+
+    if (cancel) {
+      commandVoiceError = true;
+      commandRecognition.abort();
+    } else {
+      commandRecognition.stop();
+    }
+  }
+
+  function startCommandVoice() {
+    if (commandListening) {
+      stopCommandVoice();
+      return;
+    }
+
+    if (commandBusy) return;
+
+    if (!Recognition) {
+      setCommandStatus(
+        "目前瀏覽器不支援語音辨識，請使用 Chrome、Edge 或文字輸入。",
+        true
+      );
+      return;
+    }
+
+    if (
+      !(window.mindspaceCreations || []).length
+    ) {
+      setCommandStatus(
+        "請先拍照創造積木作品。",
+        true
+      );
+      return;
+    }
+
+    const recognition = new Recognition();
+
+    commandRecognition = recognition;
+    commandVoiceError = false;
+    commandTranscript = "";
+
+    const previousText =
+      chatInput.value.trim();
+
+    recognition.lang = "zh-TW";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      commandListening = true;
+      beginCommand();
+      updateVoiceButton();
+
+      setCommandStatus(
+        "🎙️ 正在聆聽你的想像……"
+      );
+
+      say("我正在聽你的想像！");
+    };
+
+    recognition.onresult = event => {
+      let finalText = "";
+      let interimText = "";
+
+      for (
+        let i = 0;
+        i < event.results.length;
+        i++
+      ) {
+        const text =
+          event.results[i][0]?.transcript || "";
+
+        if (event.results[i].isFinal) {
+          finalText += text;
+        } else {
+          interimText += text;
+        }
+      }
+
+      commandTranscript = (
+        finalText + interimText
+      ).trim();
+
+      chatInput.value = [
+        previousText,
+        commandTranscript
+      ].filter(Boolean).join("\n");
+
+      setCommandStatus(
+        "聽到：" + commandTranscript
+      );
+    };
+
+    recognition.onerror = event => {
+      commandVoiceError = true;
+
+      const messages = {
+        "not-allowed":
+          "麥克風權限被拒絕。",
+        "no-speech":
+          "沒有聽到聲音，請再試一次。",
+        "audio-capture":
+          "找不到可用的麥克風。",
+        "network":
+          "語音辨識服務無法連線。"
+      };
+
+      setCommandStatus(
+        messages[event.error] ||
+        "語音辨識失敗：" + event.error,
+        true
+      );
+    };
+
+    recognition.onend = () => {
+      commandListening = false;
+      commandRecognition = null;
+
+      updateVoiceButton();
+
+      if (commandVoiceError) {
+        endCommand();
+        return;
+      }
+
+      if (!commandTranscript) {
+        setCommandStatus(
+          "沒有取得語音內容，請再說一次。",
+          true
+        );
+        endCommand();
+        return;
+      }
+
+      submitMindspaceCommand(
+        chatInput.value
+      );
+    };
+
+    try {
+      recognition.start();
+    } catch (error) {
+      commandRecognition = null;
+      commandListening = false;
+
+      updateVoiceButton();
+      endCommand();
+
+      setCommandStatus(
+        "無法啟動麥克風：" + error.message,
+        true
+      );
+    }
+  }
+
+  /* ---------------------------------------
+     09｜連接現有按鈕
+  --------------------------------------- */
+
+  micButton.onclick = startCommandVoice;
+
+  bubbleMic.onclick = () => {
+    const classificationModal =
+      $command("classificationModal");
+
+    if (
+      classificationModal &&
+      !classificationModal.classList.contains(
+        "hidden"
+      )
+    ) {
+      startCreationVoice();
+      return;
+    }
+
+    $command("sidebar").classList.add(
+      "open"
+    );
+
+    startCommandVoice();
+  };
+
+  /* ---------------------------------------
+     10｜選取提示初始狀態
+  --------------------------------------- */
+
+  updateVoiceButton();
+
+  console.info(
+    "[Mindspace] 文字與語音 AI 指令介面已載入"
+  );
+
+})();
+</script>
+
 </body>
 </html>
+
