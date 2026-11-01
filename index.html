@@ -1941,18 +1941,26 @@ $("analyzeCreationAI").onclick = async () => {
    10｜確認 AI 分類＋Environment 自動背景
 ===================================================== */
 
+
+/* =====================================================
+   10｜確認 AI 分類
+   Character：保留原本角色流程
+   Environment：以孩子原始積木 PNG
+   進行真正的 AI 圖像延伸
+===================================================== */
+
+let environmentExpansionBusy = false;
+
 $("confirmClassification").onclick = async () => {
-  if (analyzing) return;
+  if (analyzing || environmentExpansionBusy) {
+    return;
+  }
 
   if (!selectedType) {
     $("classificationMessage").textContent =
       "請先選擇角色或環境。";
     return;
   }
-
-  const description =
-    $("classificationDescription")
-      .value.trim();
 
   if (
     typeof window.applyMindspaceClassification !==
@@ -1963,13 +1971,16 @@ $("confirmClassification").onclick = async () => {
     return;
   }
 
-  // 保存這一次的作品資訊，避免後續拍攝
-  // 新作品時改變全域 latestCreationId。
   const creationId = latestCreationId;
+  const creationImage = latestCreationImage;
   const creationType = selectedType;
   const suggestion = aiSuggestion;
 
-  const success =
+  const description =
+    $("classificationDescription")
+      .value.trim();
+
+  const classificationResult =
     window.applyMindspaceClassification(
       creationId,
       creationType,
@@ -1977,15 +1988,17 @@ $("confirmClassification").onclick = async () => {
       suggestion
     );
 
-  if (!success) {
+  if (classificationResult === false) {
     $("classificationMessage").textContent =
       "找不到對應的積木作品。";
     return;
   }
 
+  // 原始積木已經在 p5.js 世界中。
+  // 分類完成後直接關閉視窗，
+  // 不等待 OpenAI 圖片生成。
   stopCreationVoice(true);
   closeModal("classificationModal");
-
   updateCommandSelection();
 
   if (creationType === "character") {
@@ -1993,96 +2006,175 @@ $("confirmClassification").onclick = async () => {
     return;
   }
 
-  // Environment 原始積木已經由
-  // applyMindspaceClassification 加入環境。
-  // 不等待 AI 背景生成。
+  // 以下只在 Environment 執行。
   say(
-    "你的積木環境已經加入世界！正在延伸想像世界……"
+    "你的積木環境已經進入世界！" +
+    "現在讓它慢慢延伸成更大的世界！"
   );
 
-  const identity =
-    suggestion?.name ||
-    description ||
-    "孩子創造的積木環境";
-
-  const worldDescription = [
-    "Create a beautiful, full-screen Plus-Plus",
-    "construction toy world.",
-    "",
-    "The world must grow from a child's",
-    "original Plus-Plus brick creation.",
-    "",
-    "Original creation:",
-    identity,
-    "",
-    "Child's description:",
-    description || identity,
-    "",
-    "Everything in the scene should be built",
-    "from colorful, interlocking Plus-Plus",
-    "shaped plastic bricks.",
-    "",
-    "Expand the imagined environment",
-    "naturally toward all four edges.",
-    "",
-    "Create rich depth, architecture,",
-    "terrain, lighting and atmosphere.",
-    "",
-    "The original photographed creation",
-    "will remain separately in the",
-    "interactive p5.js foreground.",
-    "",
-    "Do not reproduce the original object",
-    "as a large central duplicate.",
-    "",
-    "No words, no captions, no UI.",
-    "",
-    "The child's imagination is the",
-    "creative authority."
-  ].join("\n");
-
   if (
-    typeof window.generateMindspaceWorldAI !==
-    "function"
+    typeof creationImage !== "string" ||
+    !creationImage.startsWith(
+      "data:image/png;base64,"
+    )
   ) {
     console.error(
-      "[Mindspace] AI 背景生成模組尚未載入"
+      "[Mindspace] 缺少去背完成的原始積木 PNG"
     );
 
     say(
-      "積木環境已保留，但背景功能尚未準備好。"
+      "積木環境已經保留，但找不到可以延伸的圖片。"
     );
-
     return;
   }
 
-  try {
-    const generated =
-      await window.generateMindspaceWorldAI(
-        worldDescription
-      );
-
-    if (generated === true) {
-      say(
-        "你的 Plus-Plus 世界已經長大了！"
-      );
-    } else {
-      say(
-        "積木環境已經保留，可以稍後再生成背景。"
-      );
-    }
-
-  } catch (error) {
+  if (!bridgeReady) {
     console.error(
-      "[Mindspace] Environment 背景生成失敗",
-      error
+      "[Mindspace] OpenAI Bridge 尚未連線"
     );
 
     say(
-      "積木環境已加入世界，但背景延伸沒有完成。"
+      "積木環境已經保留，請等 AI 連線後再試一次。"
     );
+    return;
+  }
+
+  if (
+    typeof window.setMindspaceAIBackground !==
+    "function"
+  ) {
+    console.error(
+      "[Mindspace] 背景載入模組尚未準備完成"
+    );
+
+    say(
+      "積木環境已經保留，但背景模組尚未準備好。"
+    );
+    return;
+  }
+
+  const environmentData =
+    suggestion?.environment || {};
+
+  const identity = String(
+    suggestion?.identity ||
+    suggestion?.name ||
+    description ||
+    "孩子創造的積木環境"
+  );
+
+  const theme = String(
+    environmentData.theme ||
+    description ||
+    identity
+  );
+
+  const worldType = String(
+    environmentData.worldType ||
+    "fantasy"
+  );
+
+  const elements =
+    Array.isArray(environmentData.sceneElements)
+      ? environmentData.sceneElements
+      : Array.isArray(environmentData.elements)
+        ? environmentData.elements
+        : [];
+
+  environmentExpansionBusy = true;
+
+  console.log(
+    "[Mindspace] 開始真實圖片引導延伸",
+    {
+      creationId,
+      identity,
+      theme,
+      worldType,
+      imageBytesApprox:
+        Math.floor(creationImage.length * 0.75)
+    }
+  );
+
+  try {
+    const result = await requestAI(
+      "generateEnvironmentExpansionAI",
+      {
+        image: creationImage,
+        description,
+        identity,
+        theme,
+        worldType,
+        elements
+      },
+      180000
+    );
+
+    if (
+      !result ||
+      result.success !== true ||
+      result.provider !== "OpenAI" ||
+      result.imageGuided !== true ||
+      typeof result.image !== "string" ||
+      !result.image.startsWith(
+        "data:image/png;base64,"
+      )
+    ) {
+      throw new Error(
+        "OpenAI 未回傳有效的圖片延伸結果"
+      );
+    }
+
+    const loaded =
+      await window.setMindspaceAIBackground(
+        result.image,
+        theme
+      );
+
+    if (
+      !loaded ||
+      loaded.success !== true
+    ) {
+      throw new Error(
+        loaded?.superseded
+          ? "已有更新的背景取代這次生成"
+          : "AI 背景圖片沒有成功載入"
+      );
+    }
+
+    console.log(
+      "[Mindspace] Environment 圖像延伸成功",
+      {
+        provider: result.provider,
+        model: result.model,
+        imageGuided: result.imageGuided,
+        loadedWidth: loaded.width,
+        loadedHeight: loaded.height
+      }
+    );
+
+    say(
+      "你的 Plus-Plus 世界已經延伸完成！" +
+      "原本的積木也還在這裡！"
+    );
+
+  } catch (error) {
+    console.error(
+      "[Mindspace] Environment 圖像延伸失敗",
+      error
+    );
+
+    // 失敗時不清空積木、不替換背景，
+    // 也不使用假的 AI 圖片。
+    say(
+      "你的積木環境已經保留，" +
+      "但這次的背景延伸沒有完成。"
+    );
+
+  } finally {
+    environmentExpansionBusy = false;
   }
 };
+
 
 $("skipClassification").onclick = () => {
   if (analyzing) return;
