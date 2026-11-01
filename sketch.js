@@ -2323,6 +2323,17 @@ function drawPlusBlueprintFeature(feature, item) {
 }
 
   function drawFeature(feature, item) {
+    
+const featureName = String(
+  feature.feature || feature.description || ""
+).toLowerCase();
+
+// 翅膀完全交給 OpenAI PNG 渲染。
+// 不再畫 p5.js 橢圓，也不畫 Plus-Plus Blueprint。
+if (/wing|wings|翅膀|翅|羽翼|機翼/.test(featureName)) {
+  return;
+}
+
     if (
   feature.plusBlueprint &&
   feature.plusBlueprint.success === true
