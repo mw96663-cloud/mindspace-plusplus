@@ -3289,5 +3289,812 @@ connectBridge();
 
 <script src="./sketch.js"></script>
 
+<script>
+/* =====================================================
+   MINDSPACE｜CONTINUOUS AI VOICE GUIDE V2
+
+   按一次啟動 → 持續自動引導
+   兒童探索 / 長輩陪伴
+   真實 OpenAI + 瀏覽器語音朗讀
+
+   自動觸發：
+   1. 首次啟動
+   2. 新作品加入世界
+   3. AI 角色操作成功
+   4. 長時間沒有操作
+
+   安全機制：
+   - 不會一直重複說話
+   - 不在拍照、修圖、分類時插話
+   - 不在麥克風聆聽時插話
+   - 可隨時停止
+   - 不使用假的 AI 回覆
+===================================================== */
+
+(function () {
+  "use strict";
+
+  // 防止重複載入
+  if (window.mindspaceContinuousGuide) {
+    console.warn(
+      "[Mindspace] 持續引導已經載入"
+    );
+    return;
+  }
+
+  const CONFIG = {
+    idleMs: 90000,
+    cooldownMs: 60000,
+    checkMs: 4000,
+    afterActionMs: 2500
+  };
+
+  const state = {
+    enabled: false,
+    mode: "child",
+    requesting: false,
+    speaking: false,
+    generation: 0,
+    lastInteraction: Date.now(),
+    lastGuide: 0,
+    lastCreationCount: 0,
+    pendingEvent: null,
+    pendingTimer: null,
+    lastAIEvent: 0
+  };
+
+  /* ================================
+     01｜建立操作面板
+  ================================= */
+
+  const panel = document.createElement("div");
+
+  panel.id = "mindspaceVoiceGuide";
+
+  panel.style.cssText = `
+    position: fixed;
+    right: 18px;
+    bottom: 92px;
+    z-index: 9998;
+    width: min(310px, calc(100vw - 36px));
+    background: rgba(255,255,255,.97);
+    border: 1px solid #ddd;
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.15);
+    font-family: Arial, sans-serif;
+    color: #25374e;
+  `;
+
+  panel.innerHTML = `
+    <div style="
+      font-weight:bold;
+      margin-bottom:10px;
+      font-size:15px;
+    ">
+      ✨ Mindspace AI 陪伴者
+    </div>
+
+    <select
+      id="mindspaceGuideMode"
+      style="
+        width:100%;
+        padding:9px;
+        margin-bottom:10px;
+        border-radius:10px;
+      "
+    >
+      <option value="child">
+        兒童探索模式
+      </option>
+
+      <option value="elder">
+        長輩陪伴模式
+      </option>
+    </select>
+
+    <div style="
+      display:flex;
+      gap:8px;
+    ">
+      <button
+        id="mindspaceGuideStart"
+        type="button"
+        style="
+          flex:1;
+          padding:11px;
+          border-radius:10px;
+          background:#ffcf5d;
+          color:#25374e;
+          font-weight:bold;
+        "
+      >
+        ▶ 啟動 AI 引導
+      </button>
+
+      <button
+        id="mindspaceGuideStop"
+        type="button"
+        style="
+          padding:11px;
+          border-radius:10px;
+          background:#e8eef5;
+          color:#25374e;
+        "
+      >
+        ■ 停止
+      </button>
+    </div>
+
+    <div
+      id="mindspaceGuideStatus"
+      aria-live="polite"
+      style="
+        font-size:12px;
+        color:#64748b;
+        margin-top:10px;
+        line-height:1.6;
+      "
+    >
+      尚未啟動 AI 引導
+    </div>
+  `;
+
+  document.body.appendChild(panel);
+
+  const modeSelect =
+    document.getElementById(
+      "mindspaceGuideMode"
+    );
+
+  const startButton =
+    document.getElementById(
+      "mindspaceGuideStart"
+    );
+
+  const stopButton =
+    document.getElementById(
+      "mindspaceGuideStop"
+    );
+
+  const statusElement =
+    document.getElementById(
+      "mindspaceGuideStatus"
+    );
+
+  function status(message) {
+    statusElement.textContent = message;
+  }
+
+  function getCreations() {
+    return Array.isArray(
+      window.mindspaceCreations
+    )
+      ? window.mindspaceCreations
+      : [];
+  }
+
+  state.lastCreationCount =
+    getCreations().length;
+
+  /* ================================
+     02｜判斷是否適合說話
+  ================================= */
+
+  function isBusy() {
+    const modalOpen = [
+      "cameraModal",
+      "editorModal",
+      "classificationModal"
+    ].some(id => {
+      const element =
+        document.getElementById(id);
+
+      return element &&
+        !element.classList.contains(
+          "hidden"
+        );
+    });
+
+    const listening =
+      (
+        typeof creationListening !==
+        "undefined" &&
+        creationListening
+      ) ||
+      (
+        typeof commandListening !==
+        "undefined" &&
+        commandListening
+      );
+
+    const processingNow =
+      (
+        typeof processing !== "undefined" &&
+        processing
+      ) ||
+      (
+        typeof analyzing !== "undefined" &&
+        analyzing
+      ) ||
+      (
+        typeof environmentExpansionBusy !==
+        "undefined" &&
+        environmentExpansionBusy
+      );
+
+    const active =
+      document.activeElement;
+
+    const typing =
+      active &&
+      (
+        active.tagName === "TEXTAREA" ||
+        (
+          active.tagName === "INPUT" &&
+          active.type !== "checkbox"
+        )
+      );
+
+    return Boolean(
+      modalOpen ||
+      listening ||
+      processingNow ||
+      typing ||
+      state.requesting ||
+      state.speaking
+    );
+  }
+
+  function markInteraction() {
+    state.lastInteraction = Date.now();
+  }
+
+  /* ================================
+     03｜語音播放
+  ================================= */
+
+  function stopSpeech() {
+    state.generation++;
+
+    if (state.pendingTimer) {
+      clearTimeout(state.pendingTimer);
+      state.pendingTimer = null;
+    }
+
+    state.pendingEvent = null;
+    state.speaking = false;
+
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+  }
+
+  function speakGuide(text) {
+    return new Promise(resolve => {
+      if (!text) {
+        resolve();
+        return;
+      }
+
+      if (typeof say === "function") {
+        say(text);
+      }
+
+      if (
+        !("speechSynthesis" in window)
+      ) {
+        status(text);
+        resolve();
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+
+      const utterance =
+        new SpeechSynthesisUtterance(text);
+
+      utterance.lang = "zh-TW";
+
+      utterance.rate =
+        state.mode === "elder"
+          ? 0.78
+          : 0.94;
+
+      utterance.pitch =
+        state.mode === "elder"
+          ? 1
+          : 1.08;
+
+      utterance.volume = 1;
+
+      const voices =
+        window.speechSynthesis.getVoices();
+
+      const voice = voices.find(
+        v =>
+          v.lang.toLowerCase() === "zh-tw"
+      );
+
+      if (voice) {
+        utterance.voice = voice;
+      }
+
+      state.speaking = true;
+
+      status("🔊 AI 正在陪伴引導");
+
+      let finished = false;
+
+      function finish() {
+        if (finished) return;
+        finished = true;
+
+        state.speaking = false;
+        state.lastInteraction = Date.now();
+
+        if (state.enabled) {
+          status(
+            "🟢 AI 持續引導中，等待下一個互動情境"
+          );
+        }
+
+        resolve();
+      }
+
+      utterance.onend = finish;
+      utterance.onerror = finish;
+
+      window.speechSynthesis.speak(
+        utterance
+      );
+    });
+  }
+
+  /* ================================
+     04｜建立真正 AI 引導提示
+  ================================= */
+
+  function buildPrompt(eventName) {
+    const creations =
+      getCreations();
+
+    const recentCreations =
+      creations.slice(-6).map(item => ({
+        name: item.name || "",
+        identity: item.identity || "",
+        kind: item.kind || ""
+      }));
+
+    const audience =
+      state.mode === "elder"
+        ? `
+使用者為長輩。
+
+請用尊重、清楚、自然的語氣。
+不要幼稚化長輩。
+一次只提供一個簡單線索。
+讓使用者自行決定創作方向。
+`
+        : `
+使用者為兒童。
+
+請用有趣、自然、簡短的語氣。
+鼓勵孩子想像與探索。
+不要直接給出標準答案。
+不要替孩子決定角色身分。
+`;
+
+    const eventDescriptions = {
+      welcome:
+        "使用者剛啟動 AI 陪伴，請自然歡迎並引導自由創作。",
+
+      created:
+        "使用者剛將新的積木作品加入世界，請鼓勵他繼續探索。",
+
+      transformed:
+        "使用者剛成功執行一項 AI 角色操作，請提出一個新的探索方向。不要假設具體變身外型。",
+
+      idle:
+        "使用者一段時間沒有操作，請輕柔提供一個新的探索線索，不要催促。"
+    };
+
+    return `
+你是 Mindspace 心智小宇宙的 AI 創作陪伴者。
+
+你的核心原則：
+給予方法，不給予固定答案。
+
+使用者是創作者。
+AI 只能引導、陪伴、提供線索。
+
+${audience}
+
+Mindspace 的互動方式：
+1. 自由拼接 Plus-Plus 積木。
+2. 拍照並使用 AI 去背。
+3. 手動修整積木圖片。
+4. 積木進入數位世界。
+5. 選擇角色或環境。
+6. 透過語音創造能力、故事及變化。
+
+目前情境：
+${eventDescriptions[eventName] || eventName}
+
+目前作品數量：
+${creations.length}
+
+近期作品：
+${JSON.stringify(recentCreations)}
+
+重要限制：
+不要假裝看見未提供的畫面。
+不要聲稱已經執行尚未完成的操作。
+不要連續提出多個問題。
+不要使用 Markdown。
+不要給固定答案。
+
+請只回覆一句自然的繁體中文。
+最多 55 個中文字。
+`;
+  }
+
+  /* ================================
+     05｜呼叫真實 OpenAI
+  ================================= */
+
+  async function generateGuide(
+    eventName,
+    force = false
+  ) {
+    if (!state.enabled) return false;
+
+    if (isBusy()) return false;
+
+    const now = Date.now();
+
+    if (
+      !force &&
+      now - state.lastGuide <
+      CONFIG.cooldownMs
+    ) {
+      return false;
+    }
+
+    if (
+      typeof requestAI !== "function" ||
+      typeof bridgeReady === "undefined" ||
+      !bridgeReady
+    ) {
+      status(
+        "等待 OpenAI Bridge 連線"
+      );
+
+      return false;
+    }
+
+    const generation =
+      ++state.generation;
+
+    state.requesting = true;
+
+    status(
+      "✨ OpenAI 正在思考引導內容"
+    );
+
+    try {
+      const result = await requestAI(
+        "testMessage",
+        {
+          message: buildPrompt(
+            eventName
+          )
+        },
+        60000
+      );
+
+      if (
+        !state.enabled ||
+        generation !== state.generation
+      ) {
+        return false;
+      }
+
+      if (
+        !result ||
+        result.provider !== "OpenAI" ||
+        !result.responseId ||
+        typeof result.text !== "string" ||
+        !result.text.trim()
+      ) {
+        throw new Error(
+          "OpenAI 沒有回傳有效內容"
+        );
+      }
+
+      const text =
+        result.text.trim().slice(0, 180);
+
+      state.lastGuide = Date.now();
+
+      console.log(
+        "[Mindspace] 真實 OpenAI 引導",
+        {
+          event: eventName,
+          responseId: result.responseId,
+          model: result.model,
+          text
+        }
+      );
+
+      state.requesting = false;
+
+      if (
+        !state.enabled ||
+        generation !== state.generation
+      ) {
+        return false;
+      }
+
+      await speakGuide(text);
+
+      return true;
+
+    } catch (error) {
+      console.error(
+        "[Mindspace] AI 引導失敗",
+        error
+      );
+
+      if (
+        generation === state.generation
+      ) {
+        status(
+          "AI 暫時無法回應，創作仍可繼續"
+        );
+      }
+
+      return false;
+
+    } finally {
+      state.requesting = false;
+    }
+  }
+
+  /* ================================
+     06｜排程下一次引導
+  ================================= */
+
+  function scheduleGuide(eventName) {
+    if (!state.enabled) return;
+
+    state.pendingEvent = eventName;
+
+    if (state.pendingTimer) {
+      clearTimeout(state.pendingTimer);
+    }
+
+    state.pendingTimer = setTimeout(
+      () => {
+        state.pendingTimer = null;
+
+        const event =
+          state.pendingEvent;
+
+        state.pendingEvent = null;
+
+        if (!state.enabled) return;
+
+        if (
+          isBusy() ||
+          Date.now() - state.lastGuide <
+          CONFIG.cooldownMs
+        ) {
+          // 等待適合的時機再回應
+          state.pendingEvent = event;
+          return;
+        }
+
+        generateGuide(event);
+      },
+      CONFIG.afterActionMs
+    );
+  }
+
+  /* ================================
+     07｜啟動／停止
+  ================================= */
+
+  startButton.onclick = () => {
+    if (state.enabled) {
+      status(
+        "🟢 AI 已經持續引導中，不需要重複啟動"
+      );
+      return;
+    }
+
+    state.mode = modeSelect.value;
+    state.enabled = true;
+
+    state.lastInteraction = Date.now();
+    state.lastCreationCount =
+      getCreations().length;
+
+    startButton.textContent =
+      "● AI 引導中";
+
+    startButton.disabled = true;
+
+    modeSelect.disabled = true;
+
+    status(
+      "🟢 AI 持續引導已啟動"
+    );
+
+    generateGuide("welcome", true);
+  };
+
+  stopButton.onclick = () => {
+    state.enabled = false;
+
+    stopSpeech();
+
+    startButton.disabled = false;
+
+    startButton.textContent =
+      "▶ 啟動 AI 引導";
+
+    modeSelect.disabled = false;
+
+    status(
+      "⚪ AI 引導已停止"
+    );
+  };
+
+  /* ================================
+     08｜偵測新作品
+  ================================= */
+
+  function checkNewCreation() {
+    const count =
+      getCreations().length;
+
+    if (
+      count > state.lastCreationCount &&
+      state.enabled
+    ) {
+      markInteraction();
+
+      scheduleGuide("created");
+    }
+
+    state.lastCreationCount = count;
+  }
+
+  /* ================================
+     09｜偵測 AI 操作成功
+  ================================= */
+
+  window.addEventListener(
+    "mindspace:ai-applied",
+    event => {
+      if (!state.enabled) return;
+
+      const result =
+        event.detail || {};
+
+      if (
+        result.success === true &&
+        result.applied > 0
+      ) {
+        markInteraction();
+
+        state.lastAIEvent = Date.now();
+
+        scheduleGuide(
+          "transformed"
+        );
+      }
+    }
+  );
+
+  /* ================================
+     10｜偵測長時間停頓
+  ================================= */
+
+  function checkIdle() {
+    if (!state.enabled) return;
+
+    if (isBusy()) return;
+
+    const now = Date.now();
+
+    const idleTime =
+      now - state.lastInteraction;
+
+    const sinceGuide =
+      now - state.lastGuide;
+
+    if (
+      idleTime >= CONFIG.idleMs &&
+      sinceGuide >= CONFIG.cooldownMs
+    ) {
+      generateGuide("idle");
+    }
+  }
+
+  /* ================================
+     11｜保留操作中的安靜時間
+  ================================= */
+
+  ["pointerdown", "keydown"].forEach(
+    name => {
+      document.addEventListener(
+        name,
+        markInteraction,
+        {
+          passive: true
+        }
+      );
+    }
+  );
+
+  /* ================================
+     12｜持續檢查
+  ================================= */
+
+  setInterval(() => {
+    checkNewCreation();
+
+    if (
+      state.enabled &&
+      state.pendingEvent &&
+      !isBusy() &&
+      Date.now() - state.lastGuide >=
+      CONFIG.cooldownMs
+    ) {
+      const event =
+        state.pendingEvent;
+
+      state.pendingEvent = null;
+
+      generateGuide(event);
+
+      return;
+    }
+
+    checkIdle();
+
+  }, CONFIG.checkMs);
+
+  /* ================================
+     13｜對外控制介面
+  ================================= */
+
+  window.mindspaceContinuousGuide = {
+    start: () => startButton.click(),
+
+    stop: () => stopButton.click(),
+
+    notify: eventName => {
+      markInteraction();
+      scheduleGuide(eventName);
+    },
+
+    getState: () => ({
+      enabled: state.enabled,
+      mode: state.mode,
+      requesting: state.requesting,
+      speaking: state.speaking
+    })
+  };
+
+  console.log(
+    "[Mindspace] 持續 AI 引導已準備完成"
+  );
+
+})();
+</script>
+
 </body>
 </html>
