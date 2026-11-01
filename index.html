@@ -3508,21 +3508,7 @@ connectBridge();
       );
     });
 
-  startButton.addEventListener(
-    "click",
-    event => {
-      if (longPressed) {
-        event.stopImmediatePropagation();
-        longPressed = false;
-        return;
-      }
-
-      if (state.enabled) {
-        stopButton.click();
-      }
-    },
-    true
-  );
+  
 
   modeSelect.addEventListener(
     "change",
@@ -4032,15 +4018,59 @@ ${JSON.stringify(recentCreations)}
     generateGuide("welcome", true);
   };
 
-  stopButton.onclick = () => {
-    state.enabled = false;
+  
+/* ================================
+   07｜AI 泡泡：點一下開啟，再點一下關閉
+================================ */
 
-    stopSpeech();
+startButton.onclick = () => {
 
-    updateGuideBubble();
+  // 長按只切換模式，不啟動或停止
+  if (longPressed) {
+    longPressed = false;
+    return;
+  }
 
-    status("AI 引導已停止");
-  };
+  // AI 已啟動：再次點擊就關閉
+  if (state.enabled) {
+    stopGuide();
+    return;
+  }
+
+  // AI 尚未啟動：開始持續引導
+  state.mode = modeSelect.value;
+  state.enabled = true;
+
+  state.lastInteraction = Date.now();
+  state.lastCreationCount =
+    getCreations().length;
+
+  modeSelect.style.display = "none";
+
+  updateGuideBubble();
+  status("AI 持續引導中");
+
+  generateGuide("welcome", true);
+};
+
+function stopGuide() {
+  state.enabled = false;
+
+  // 停止朗讀及取消待執行的引導
+  stopSpeech();
+
+  // 恢復泡泡外觀
+  updateGuideBubble();
+  status("AI 引導已停止");
+
+  console.log(
+    "[Mindspace] AI 持續引導已停止"
+  );
+}
+
+// 讓其他程式也能停止 AI
+stopButton.onclick = stopGuide;
+
 
   /* ================================
      08｜偵測新作品
