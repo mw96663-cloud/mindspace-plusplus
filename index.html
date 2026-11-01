@@ -2141,6 +2141,21 @@ $("confirmClassification").onclick = async () => {
       );
     }
 
+    // AI 背景成功載入後，隱藏原始環境積木照片。
+    // Character 不受影響。
+    const hidden =
+      window.hideMindspaceEnvironmentOriginal?.(
+        creationId
+      );
+
+    console.log(
+      "[Mindspace] 環境原始照片隱藏結果",
+      {
+        creationId,
+        hidden
+      }
+    );
+
     console.log(
       "[Mindspace] Environment 圖像延伸成功",
       {
@@ -2152,10 +2167,13 @@ $("confirmClassification").onclick = async () => {
       }
     );
 
+    
     say(
       "你的 Plus-Plus 世界已經延伸完成！" +
-      "原本的積木也還在這裡！"
+      "原本的環境積木已融入背景，" +
+      "角色會繼續在世界中活動！"
     );
+
 
   } catch (error) {
     console.error(
