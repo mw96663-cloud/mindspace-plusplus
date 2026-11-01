@@ -1831,3 +1831,1070 @@ window.performMindspaceAction = function(command) {
 
   return true;
 };
+
+/* ==========================================================
+   Mindspace Plus-Plus
+   第四階段第二步｜自主移動 + AI 指令執行模組
+
+   保留：
+   - 原始積木 PNG
+   - AI 分類
+   - 黃色選取圓圈
+   - 拖曳
+   - 多角色共存
+   - 世界融合
+   - 環境特效
+
+   新增：
+   - 角色持續自主移動
+   - AI operations 執行入口
+   - 外觀附加特徵
+   - 能力視覺效果
+   - 角色變身
+   - AI 環境變化
+   - 簡易配角
+   - 故事與互動資料
+
+   注意：
+   本模組不呼叫 OpenAI。
+   真實 AI 請求由 index.html / GAS 負責。
+========================================================== */
+
+(function installMindspaceAIExecutor() {
+  "use strict";
+
+  const VALID_MOVEMENTS = new Set([
+    "float", "swim", "walk", "fly",
+    "bounce", "run", "crawl", "hover"
+  ]);
+
+  const VALID_OPERATIONS = new Set([
+    "appearance", "ability", "movement",
+    "environment", "companion", "interaction",
+    "story", "transform"
+  ]);
+
+  const extraEnvironments = [];
+  const companionCharacters = [];
+  const worldStories = [];
+
+  const safeNumber = (value, fallback, min, max) => {
+    const n = Number(value);
+    return Number.isFinite(n)
+      ? Math.max(min, Math.min(max, n))
+      : fallback;
+  };
+
+  const safeText = (value, fallback = "", limit = 300) =>
+    String(value == null ? fallback : value).slice(0, limit);
+
+  function getTarget(operation) {
+    const id =
+      operation.targetId ||
+      window.mindspaceSelectedId;
+
+    return creations.find(item => item.id === id) || null;
+  }
+
+  function prepareItem(item) {
+    if (!item.aiVisuals) {
+      item.aiVisuals = {
+        features: [],
+        abilities: [],
+        identity: "",
+        tint: null
+      };
+    }
+
+    if (!Number.isFinite(item.aiDirection)) {
+      item.aiDirection = item.vx < 0 ? -1 : 1;
+    }
+
+    if (!Number.isFinite(item.aiTurnAt)) {
+      item.aiTurnAt = worldTime + random(2, 6);
+    }
+
+    if (!Number.isFinite(item.aiVerticalDirection)) {
+      item.aiVerticalDirection = random() < .5 ? -1 : 1;
+    }
+
+    return item;
+  }
+
+  /* -------------------------------------------------------
+     A｜真正自主移動
+
+     不再因為沒有 childAction 就停止位移。
+     原本的 childAction 仍可暫時改變動作。
+  ------------------------------------------------------- */
+
+  updateCreation = function(item) {
+    if (dragging === item) return;
+
+    prepareItem(item);
+
+    if (item.kind === "environment") {
+      item.y = item.baseY +
+        Math.sin(worldTime * .8 + item.phase) * 1.5;
+      return;
+    }
+
+    const movement = VALID_MOVEMENTS.has(item.movement)
+      ? item.movement
+      : "float";
+
+    const speed = safeNumber(item.speed, 1, .2, 3);
+    const energy = safeNumber(item.energy, .5, 0, 1);
+
+    const dt = Math.min(deltaTime || 16.67, 50) / 16.67;
+
+    if (worldTime >= item.aiTurnAt) {
+      if (random() < .55) {
+        item.aiDirection *= -1;
+      }
+
+      if (random() < .35) {
+        item.aiVerticalDirection *= -1;
+      }
+
+      item.aiTurnAt = worldTime + random(2, 6);
+    }
+
+    let horizontal = 0;
+    let vertical = 0;
+
+    switch (movement) {
+      case "swim":
+        horizontal = .65;
+        vertical =
+          Math.sin(worldTime * 1.9 + item.phase) * .55;
+        break;
+
+      case "fly":
+        horizontal = .85;
+        vertical =
+          Math.sin(worldTime * 1.3 + item.phase) * .65;
+        break;
+
+      case "hover":
+        horizontal = .35;
+        vertical =
+          Math.sin(worldTime * 1.8 + item.phase) * .42;
+        break;
+
+      case "walk":
+        horizontal = .45;
+        break;
+
+      case "run":
+        horizontal = 1.25;
+        break;
+
+      case "crawl":
+        horizontal = .22;
+        break;
+
+      case "bounce":
+        horizontal = .65;
+        break;
+
+      default:
+        horizontal = .38;
+        vertical =
+          Math.sin(worldTime * 1.2 + item.phase) * .30;
+    }
+
+    const action =
+      item.childAction &&
+      worldTime < item.childAction.until
+        ? item.childAction
+        : null;
+
+    if (!action) {
+      item.childAction = null;
+    }
+
+    if (action) {
+      const actionSpeed = safeNumber(
+        action.speed, 1, .2, 3
+      );
+
+      switch (action.type) {
+        case "fly":
+        case "hover":
+          horizontal = .9 * actionSpeed;
+          vertical = -.5;
+          break;
+
+        case "swim":
+          horizontal = .8 * actionSpeed;
+          vertical =
+            Math.sin(worldTime * 3) * .7;
+          break;
+
+        case "run":
+          horizontal = 1.4 * actionSpeed;
+          break;
+
+        case "walk":
+          horizontal = .5 * actionSpeed;
+          break;
+
+        case "jump":
+        case "bounce":
+          horizontal = .5 * actionSpeed;
+          break;
+      }
+
+      if (action.direction === -1) {
+        item.aiDirection = -1;
+      } else if (action.direction === 1) {
+        item.aiDirection = 1;
+      }
+    }
+
+    const velocity = speed * (.55 + energy * .7);
+
+    item.x += horizontal *
+      item.aiDirection * velocity * dt;
+
+    const minX = item.w / 2 + 12;
+    const maxX = Math.max(
+      minX,
+      width - item.w / 2 - 12
+    );
+
+    if (item.x <= minX) {
+      item.x = minX;
+      item.aiDirection = 1;
+    }
+
+    if (item.x >= maxX) {
+      item.x = maxX;
+      item.aiDirection = -1;
+    }
+
+    const groundY = Math.max(
+      item.h / 2 + 12,
+      Math.min(
+        height - item.h / 2 - 12,
+        height * .87 - item.h / 2
+      )
+    );
+
+    if ([
+      "walk", "run", "crawl", "bounce"
+    ].includes(movement)) {
+      item.baseY +=
+        (groundY - item.baseY) * .045 * dt;
+
+      if (movement === "bounce" ||
+          action?.type === "jump" ||
+          action?.type === "bounce") {
+        item.y = item.baseY -
+          Math.abs(
+            Math.sin(worldTime * 3.2 * velocity)
+          ) * (15 + energy * 32);
+      } else {
+        item.y = item.baseY -
+          Math.abs(
+            Math.sin(worldTime * 6 * velocity)
+          ) * (movement === "run" ? 6 : 3);
+      }
+    } else {
+      item.baseY += vertical *
+        item.aiVerticalDirection * velocity * dt;
+
+      const minY = item.h / 2 + 20;
+      const maxY = Math.max(
+        minY,
+        height - item.h / 2 - 35
+      );
+
+      if (item.baseY < minY) {
+        item.baseY = minY;
+        item.aiVerticalDirection = 1;
+      }
+
+      if (item.baseY > maxY) {
+        item.baseY = maxY;
+        item.aiVerticalDirection = -1;
+      }
+
+      item.y = item.baseY +
+        Math.sin(worldTime * 2 + item.phase) *
+        (4 + energy * 9);
+    }
+  };
+
+  /* -------------------------------------------------------
+     B｜外觀附加繪製
+
+     不修改 item.img 或 originalPNG。
+     只在角色圖片周圍增加繪製圖層。
+  ------------------------------------------------------- */
+
+  function featureColor(value, index = 0) {
+    const name = safeText(value).toLowerCase();
+
+    if (name.includes("rainbow") ||
+        name.includes("彩虹")) {
+      return [
+        "#FF6B78", "#FFB347", "#FFE66D",
+        "#65D98B", "#69C8FF", "#B58BFF"
+      ][index % 6];
+    }
+
+    if (name.includes("blue") || name.includes("藍")) {
+      return "#67B9FF";
+    }
+
+    if (name.includes("red") || name.includes("紅")) {
+      return "#FF7382";
+    }
+
+    if (name.includes("purple") || name.includes("紫")) {
+      return "#B58BFF";
+    }
+
+    if (name.includes("green") || name.includes("綠")) {
+      return "#7DDB9B";
+    }
+
+    if (name.includes("yellow") || name.includes("黃")) {
+      return "#FFE17A";
+    }
+
+    if (/^#[0-9a-f]{6}$/i.test(name)) {
+      return name;
+    }
+
+    return "#A7D8FF";
+  }
+
+  function drawFeature(feature, item) {
+    const name = safeText(
+      feature.feature || feature.description
+    ).toLowerCase();
+
+    const count = Math.round(
+      safeNumber(feature.count, 2, 1, 30)
+    );
+
+    const c = feature.color || feature.description;
+
+    push();
+    noStroke();
+
+    if (/wing|翅膀|翅/.test(name)) {
+      for (let i = 0; i < count; i++) {
+        const side = i % 2 === 0 ? -1 : 1;
+        const layer = Math.floor(i / 2);
+        const flap =
+          Math.sin(worldTime * 7 + layer) * .18;
+
+        push();
+
+        translate(
+          side * item.w * .34,
+          -item.h * .10 + layer * 9
+        );
+
+        rotate(side * (flap + .15));
+
+        fill(featureColor(c, i));
+
+        ellipse(
+          side * (item.w * .18 + layer * 3),
+          -item.h * .11,
+          item.w * .40,
+          item.h * .28
+        );
+
+        pop();
+      }
+    } else if (/horn|角/.test(name)) {
+      for (let i = 0; i < count; i++) {
+        const x =
+          (i - (count - 1) / 2) *
+          Math.min(22, item.w / (count + 1));
+
+        fill(featureColor(c, i));
+
+        triangle(
+          x - 9, -item.h * .40,
+          x + 9, -item.h * .40,
+          x, -item.h * .63
+        );
+      }
+    } else if (/tentacle|觸手/.test(name)) {
+      for (let i = 0; i < count; i++) {
+        const x =
+          (i - (count - 1) / 2) *
+          Math.min(15, item.w / (count + 1));
+
+        noFill();
+        stroke(featureColor(c, i));
+        strokeWeight(5);
+
+        bezier(
+          x, item.h * .34,
+          x - 10, item.h * .50,
+          x + 12, item.h * .62,
+          x + Math.sin(worldTime * 3 + i) * 10,
+          item.h * .78
+        );
+      }
+    } else if (/tail|尾巴/.test(name)) {
+      fill(featureColor(c));
+
+      triangle(
+        item.w * .37, 0,
+        item.w * .70, -item.h * .18,
+        item.w * .70, item.h * .18
+      );
+    } else if (/eye|眼睛/.test(name)) {
+      for (let i = 0; i < count; i++) {
+        const x =
+          (i - (count - 1) / 2) *
+          Math.min(20, item.w / (count + 1));
+
+        fill(255);
+        circle(x, -item.h * .18, 18);
+
+        fill(featureColor(c, i));
+        circle(x, -item.h * .18, 9);
+      }
+    } else {
+      // 尚未有專屬幾何畫法的特徵：
+      // 以彩色 Plus-Plus 積木裝飾呈現，
+      // 並保留原始描述供後續精細化。
+      const visibleCount = Math.min(count, 12);
+
+      for (let i = 0; i < visibleCount; i++) {
+        const a = TWO_PI * i / visibleCount;
+
+        plusBlock(
+          Math.cos(a) * item.w * .58,
+          Math.sin(a) * item.h * .58,
+          12,
+          featureColor(c, i),
+          a
+        );
+      }
+    }
+
+    pop();
+  }
+
+  /* -------------------------------------------------------
+     C｜角色能力效果
+  ------------------------------------------------------- */
+
+  function drawAbility(ability, item) {
+    const name = safeText(
+      ability.ability || ability.description
+    ).toLowerCase();
+
+    const c = featureColor(
+      ability.color || ability.description
+    );
+
+    const t = worldTime;
+
+    push();
+
+    if (/laser|雷射|光束/.test(name)) {
+      const pulse =
+        .5 + .5 * Math.sin(t * 9);
+
+      stroke(c);
+      strokeWeight(2 + pulse * 5);
+
+      const startX = item.w * .22;
+      const startY = -item.h * .15;
+
+      line(
+        startX, startY,
+        startX + item.w * 1.2, startY
+      );
+
+      stroke(255, 255, 255, 190);
+      strokeWeight(2);
+
+      line(
+        startX, startY,
+        startX + item.w * 1.2, startY
+      );
+    } else if (/fire|火焰|噴火/.test(name)) {
+      noStroke();
+
+      for (let i = 0; i < 9; i++) {
+        const x =
+          item.w * .3 + i * 12;
+
+        const y =
+          Math.sin(t * 8 + i) * 11;
+
+        fill(i % 2 ? "#FFB347" : "#FF6B48");
+
+        ellipse(
+          x, y,
+          18 + Math.sin(t * 7 + i) * 5,
+          14
+        );
+      }
+    } else if (/lightning|閃電|電擊/.test(name)) {
+      stroke(c);
+      strokeWeight(4);
+      noFill();
+
+      beginShape();
+
+      for (let i = 0; i < 8; i++) {
+        vertex(
+          item.w * .3 + i * 16,
+          Math.sin(i * 3 + t * 12) * 17
+        );
+      }
+
+      endShape();
+    } else if (/bubble|泡泡/.test(name)) {
+      noFill();
+      stroke(c);
+      strokeWeight(2);
+
+      for (let i = 0; i < 9; i++) {
+        const a = t + i * 1.7;
+
+        circle(
+          Math.cos(a) * item.w * .65,
+          Math.sin(a) * item.h * .7,
+          8 + i % 4 * 5
+        );
+      }
+    } else {
+      // 未分類能力：呈現能量光暈，
+      // 不宣稱已精準畫出孩子描述的能力。
+      noFill();
+      stroke(c);
+      strokeWeight(2);
+
+      circle(
+        0, 0,
+        Math.max(item.w, item.h) *
+        (1.25 + Math.sin(t * 3) * .08)
+      );
+    }
+
+    pop();
+  }
+
+  const previousDrawCreation = drawCreation;
+
+  drawCreation = function(item) {
+    prepareItem(item);
+
+    push();
+
+    translate(item.x, item.y);
+
+    for (const feature of item.aiVisuals.features) {
+      drawFeature(feature, item);
+    }
+
+    pop();
+
+    // 原本的 PNG 繪製函式完全保留。
+    previousDrawCreation(item);
+
+    push();
+
+    translate(item.x, item.y);
+
+    for (const ability of item.aiVisuals.abilities) {
+      drawAbility(ability, item);
+    }
+
+    pop();
+  };
+
+  /* -------------------------------------------------------
+     D｜AI 指令執行
+  ------------------------------------------------------- */
+
+  function applyOperation(operation) {
+    if (!operation ||
+        typeof operation !== "object" ||
+        !VALID_OPERATIONS.has(operation.type)) {
+      return false;
+    }
+
+    const item = getTarget(operation);
+
+    switch (operation.type) {
+      case "appearance": {
+        if (!item) return false;
+
+        prepareItem(item);
+
+        item.aiVisuals.features.push({
+          feature: safeText(operation.feature),
+          description: safeText(operation.description),
+          count: safeNumber(
+            operation.count, 2, 1, 30
+          ),
+          color: safeText(operation.color),
+          placement: safeText(operation.placement)
+        });
+
+        item.aiVisuals.features =
+          item.aiVisuals.features.slice(-20);
+
+        return true;
+      }
+
+      case "ability": {
+        if (!item) return false;
+
+        prepareItem(item);
+
+        const ability = {
+          ability: safeText(operation.ability),
+          description: safeText(operation.description),
+          color: safeText(operation.color),
+          origin: safeText(operation.origin),
+          trigger: safeText(
+            operation.trigger,
+            "autonomous"
+          )
+        };
+
+        item.aiVisuals.abilities.push(ability);
+
+        item.aiVisuals.abilities =
+          item.aiVisuals.abilities.slice(-12);
+
+        if (!Array.isArray(item.abilities)) {
+          item.abilities = [];
+        }
+
+        item.abilities.push(
+          ability.description || ability.ability
+        );
+
+        return true;
+      }
+
+      case "movement": {
+        if (!item || item.kind !== "character") {
+          return false;
+        }
+
+        if (VALID_MOVEMENTS.has(operation.movement)) {
+          item.movement = operation.movement;
+        }
+
+        item.speed = safeNumber(
+          operation.speed,
+          item.speed || 1,
+          .2, 3
+        );
+
+        item.energy = safeNumber(
+          operation.energy,
+          item.energy || .5,
+          0, 1
+        );
+
+        // 保留自主移動，不設永久 childAction。
+        item.childAction = null;
+
+        return true;
+      }
+
+      case "transform": {
+        if (!item) return false;
+
+        prepareItem(item);
+
+        if (operation.identity) {
+          item.identity = safeText(operation.identity);
+          item.aiVisuals.identity = item.identity;
+        }
+
+        if (operation.appearance) {
+          item.aiVisuals.features.push({
+            feature: safeText(operation.appearance),
+            description: safeText(operation.appearance),
+            count: 1,
+            color: "",
+            placement: ""
+          });
+        }
+
+        if (VALID_MOVEMENTS.has(operation.movement)) {
+          item.movement = operation.movement;
+        }
+
+        if (Array.isArray(operation.abilities)) {
+          for (const ability of operation.abilities.slice(0, 8)) {
+            applyOperation({
+              type: "ability",
+              targetId: item.id,
+              ability: safeText(ability),
+              description: safeText(ability)
+            });
+          }
+        }
+
+        return true;
+      }
+
+      case "environment": {
+        const worldType =
+          WORLD_STYLES[operation.worldType]
+            ? operation.worldType
+            : "fantasy";
+
+        extraEnvironments.push({
+          id: "ai-env-" + Date.now() + "-" +
+            Math.floor(Math.random() * 100000),
+          type: worldType,
+          description: safeText(operation.description),
+          elements: Array.isArray(operation.elements)
+            ? operation.elements.slice(0, 10)
+            : [],
+          createdAt: millis()
+        });
+
+        if (item) {
+          createOrUpdateWorld(item, {
+            environment: {
+              worldType,
+              sceneElements:
+                Array.isArray(operation.elements)
+                  ? operation.elements.slice(0, 8)
+                  : [],
+              effect: operation.effect || "sparkle"
+            }
+          });
+        } else {
+          worldZones.push({
+            id: extraEnvironments[
+              extraEnvironments.length - 1
+            ].id,
+            type: worldType,
+            elements: Array.isArray(operation.elements)
+              ? operation.elements.slice(0, 8)
+              : [],
+            createdAt: millis(),
+            seed: random(10000)
+          });
+
+          startEnvironmentEffect(
+            operation.effect || "sparkle",
+            width / 2,
+            height / 2
+          );
+        }
+
+        return true;
+      }
+
+      case "companion": {
+        const companion = {
+          id: "companion-" + Date.now() + "-" +
+            Math.floor(Math.random() * 100000),
+          targetId: item ? item.id : null,
+          name: safeText(
+            operation.name, "想像配角"
+          ),
+          description: safeText(operation.description),
+          appearance: safeText(operation.appearance),
+          personality: safeText(operation.personality),
+          movement: VALID_MOVEMENTS.has(operation.movement)
+            ? operation.movement
+            : "float",
+          x: item ? item.x + 110 : width / 2,
+          y: item ? item.y - 60 : height / 2,
+          phase: random(TWO_PI),
+          color: featureColor(
+            operation.appearance ||
+            operation.description
+          )
+        };
+
+        companionCharacters.push(companion);
+
+        return true;
+      }
+
+      case "interaction": {
+        if (!item) return false;
+
+        item.interaction = safeText(
+          operation.interaction ||
+          operation.description
+        );
+
+        return true;
+      }
+
+      case "story": {
+        worldStories.push({
+          text: safeText(
+            operation.story ||
+            operation.description,
+            "",
+            1000
+          ),
+          createdAt: Date.now()
+        });
+
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  window.applyMindspaceAIOperations = function(operations) {
+    if (!Array.isArray(operations)) {
+      return {
+        success: false,
+        applied: 0,
+        failed: 0,
+        error: "operations 必須是陣列"
+      };
+    }
+
+    let applied = 0;
+    let failed = 0;
+
+    for (const operation of operations.slice(0, 30)) {
+      try {
+        if (applyOperation(operation)) {
+          applied++;
+        } else {
+          failed++;
+        }
+      } catch (error) {
+        console.error(
+          "[Mindspace] AI operation error:",
+          error
+        );
+        failed++;
+      }
+    }
+
+    const result = {
+      success: failed === 0,
+      applied,
+      failed
+    };
+
+    window.dispatchEvent(
+      new CustomEvent("mindspace:ai-applied", {
+        detail: result
+      })
+    );
+
+    return result;
+  };
+
+  /* -------------------------------------------------------
+     E｜簡易配角自主移動與繪製
+
+     這是可運作的初版積木配角，
+     不是最終的 AI 精細造型生成器。
+  ------------------------------------------------------- */
+
+  function drawCompanions() {
+    for (const companion of companionCharacters) {
+      const speed =
+        companion.movement === "run" ? 1.8 :
+        companion.movement === "fly" ? 1.2 : .65;
+
+      companion.x +=
+        Math.sin(worldTime * .8 + companion.phase) *
+        speed;
+
+      companion.y +=
+        Math.sin(worldTime * 1.3 + companion.phase) *
+        .35;
+
+      companion.x = constrain(
+        companion.x, 35, width - 35
+      );
+
+      companion.y = constrain(
+        companion.y, 35, height - 35
+      );
+
+      push();
+
+      translate(companion.x, companion.y);
+
+      // 使用 Plus-Plus 積木組合成簡易配角。
+      plusBlock(0, 0, 34, companion.color);
+
+      plusBlock(
+        -20, -15, 20,
+        companion.color, -.3
+      );
+
+      plusBlock(
+        20, -15, 20,
+        companion.color, .3
+      );
+
+      plusBlock(
+        -15, 24, 17,
+        companion.color
+      );
+
+      plusBlock(
+        15, 24, 17,
+        companion.color
+      );
+
+      noStroke();
+      fill(255);
+
+      circle(-9, -7, 12);
+      circle(9, -7, 12);
+
+      fill("#26374D");
+
+      circle(-9, -7, 5);
+      circle(9, -7, 5);
+
+      pop();
+    }
+  }
+
+  /* -------------------------------------------------------
+     F｜把配角加入原本的 draw() 流程
+  ------------------------------------------------------- */
+
+  const previousDraw = draw;
+
+  draw = function() {
+    previousDraw();
+    drawCompanions();
+  };
+
+  /* -------------------------------------------------------
+     G｜清空世界時同步清除新增資料
+
+     不改變原本清空按鈕的行為。
+  ------------------------------------------------------- */
+
+  const previousClearWorld = window.clearMindspaceWorld;
+
+  window.clearMindspaceWorld = function() {
+    previousClearWorld();
+
+    extraEnvironments.length = 0;
+    companionCharacters.length = 0;
+    worldStories.length = 0;
+  };
+
+  /* -------------------------------------------------------
+     H｜公開狀態
+
+     供之後文字輸入、語音輸入與 OpenAI 使用。
+  ------------------------------------------------------- */
+
+  const previousGetWorldState =
+    window.getMindspaceWorldState;
+
+  window.getMindspaceWorldState = function() {
+    const state = previousGetWorldState();
+
+    state.selectedCreationId =
+      window.mindspaceSelectedId || null;
+
+    state.creations = state.creations.map(data => {
+      const item = creations.find(
+        creation => creation.id === data.id
+      );
+
+      return {
+        ...data,
+        name: item?.name || "",
+        personality: item?.personality || "",
+        interaction: item?.interaction || "",
+        visualFeatures:
+          item?.aiVisuals?.features || []
+      };
+    });
+
+    state.companions = companionCharacters.map(
+      companion => ({
+        id: companion.id,
+        name: companion.name,
+        appearance: companion.appearance,
+        movement: companion.movement
+      })
+    );
+
+    state.stories = worldStories.slice(-10);
+
+    return state;
+  };
+
+  /* -------------------------------------------------------
+     I｜測試入口
+
+     可以直接在瀏覽器 Console 執行：
+     testMindspaceAIExecutor()
+  ------------------------------------------------------- */
+
+  window.testMindspaceAIExecutor = function() {
+    const selected =
+      window.getSelectedMindspaceCreation?.();
+
+    if (!selected) {
+      console.warn(
+        "[Mindspace] 請先選取一個角色"
+      );
+
+      return {
+        success: false,
+        error: "請先選取角色"
+      };
+    }
+
+    return window.applyMindspaceAIOperations([
+      {
+        type: "appearance",
+        targetId: selected.id,
+        feature: "wings",
+        count: 8,
+        color: "rainbow",
+        description: "長出八隻彩虹翅膀"
+      },
+      {
+        type: "movement",
+        targetId: selected.id,
+        movement: "fly",
+        speed: 1.5,
+        energy: .8
+      },
+      {
+        type: "ability",
+        targetId: selected.id,
+        ability: "laser",
+        color: "blue",
+        origin: "eyes",
+        description: "發射藍色雷射光"
+      }
+    ]);
+  };
+
+  console.log(
+    "[Mindspace] 自主移動與 AI 指令執行模組已載入"
+  );
+})();
