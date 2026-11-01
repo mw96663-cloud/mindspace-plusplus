@@ -4583,3 +4583,339 @@ case "appearance": {
     "[Mindspace] AI Plus-Plus Blueprint Renderer 已載入"
   );
 })();
+
+/* =========================================================
+   MINDSPACE｜OPENAI PLACED PNG ACCESSORY V3
+
+   保留：
+   - 原始積木 PNG
+   - 既有 AI 分類、環境、技能、藍圖
+   - 角色自主移動與拖曳
+   - 舊版配件
+
+   新增：
+   - 接收 OpenAI placement.points
+   - 依 AI 位置附著透明 PNG
+   - 翅膀持續拍動
+   - 配件跟隨角色移動
+   - 圖片載入成功才回報 success
+========================================================= */
+
+(function installMindspacePlacedAccessoriesV3() {
+  "use strict";
+
+  const previousDrawCreation = drawCreation;
+
+  function findTarget(id) {
+    return (window.mindspaceCreations || []).find(
+      item => String(item.id) === String(id)
+    );
+  }
+
+  function isValidPNG(value) {
+    return (
+      typeof value === "string" &&
+      /^data:image\/png;base64,/i.test(value)
+    );
+  }
+
+  function loadPNG(dataURL) {
+    return new Promise((resolve, reject) => {
+      if (!isValidPNG(dataURL)) {
+        reject(new Error(
+          "OpenAI 沒有回傳有效的透明 PNG"
+        ));
+        return;
+      }
+
+      loadImage(
+        dataURL,
+        img => resolve(img),
+        () => reject(new Error(
+          "OpenAI 配件 PNG 載入失敗"
+        ))
+      );
+    });
+  }
+
+  function finiteNumber(value, fallback) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function isWing(feature) {
+    return /wing|翅|翼/i.test(
+      String(feature || "")
+    );
+  }
+
+  /*
+    AI 座標約定：
+    x、y：以角色原始照片中心為基準，
+          -0.5～0.5 為一般相對座標
+    width、height：相對角色尺寸
+    angle：弧度
+    layer：front / back
+    mirror：是否水平鏡射
+
+    若後端提供的是其他座標格式，
+    必須同步調整這裡的轉換。
+  */
+  function normalizePoint(point) {
+    if (!point || typeof point !== "object") {
+      throw new Error(
+        "OpenAI 配件定位點格式錯誤"
+      );
+    }
+
+    const x = Number(point.x);
+    const y = Number(point.y);
+    const width = Number(point.width);
+    const height = Number(point.height);
+
+    if (
+      !Number.isFinite(x) ||
+      !Number.isFinite(y) ||
+      !Number.isFinite(width) ||
+      !Number.isFinite(height) ||
+      width <= 0 ||
+      height <= 0
+    ) {
+      throw new Error(
+        "OpenAI 回傳的配件位置或尺寸無效"
+      );
+    }
+
+    return {
+      x,
+      y,
+      width,
+      height,
+      angle: finiteNumber(point.angle, 0),
+      mirror: point.mirror === true,
+      layer:
+        point.layer === "back"
+          ? "back"
+          : "front"
+    };
+  }
+
+  window.addMindspaceAIAccessory =
+    async function(data) {
+
+      if (!data || typeof data !== "object") {
+        throw new Error(
+          "缺少 AI 配件資料"
+        );
+      }
+
+      const targetId = String(
+        data.targetId ||
+        window.mindspaceSelectedId ||
+        ""
+      );
+
+      const item = findTarget(targetId);
+
+      if (!item) {
+        throw new Error(
+          "找不到指定的積木角色"
+        );
+      }
+
+      if (item.kind !== "character") {
+        throw new Error(
+          "目前只能將 AI 配件附著到角色"
+        );
+      }
+
+      const count = Math.round(
+        Number(data.count) || 1
+      );
+
+      if (count < 1 || count > 30) {
+        throw new Error(
+          "配件數量必須介於 1～30"
+        );
+      }
+
+      const placement = data.placement;
+
+      if (
+        !placement ||
+        placement.success !== true ||
+        !Array.isArray(placement.points)
+      ) {
+        throw new Error(
+          "OpenAI 沒有提供有效的配件定位"
+        );
+      }
+
+      if (placement.points.length !== count) {
+        throw new Error(
+          "AI 定位數量與配件數量不一致：" +
+          placement.points.length +
+          " / " +
+          count
+        );
+      }
+
+      const points = placement.points.map(
+        normalizePoint
+      );
+
+      // 真正載入 OpenAI 回傳的圖片。
+      // 不是使用 p5.js 假造積木配件。
+      const accessoryImage = await loadPNG(
+        data.image
+      );
+
+      if (!Array.isArray(
+        item.mindspacePlacedAccessoriesV3
+      )) {
+        item.mindspacePlacedAccessoriesV3 = [];
+      }
+
+      const accessory = {
+        id:
+          "placed-accessory-" +
+          Date.now() + "-" +
+          Math.random().toString(36).slice(2),
+
+        image: accessoryImage,
+        feature: String(
+          data.feature || "accessory"
+        ),
+        description: String(
+          data.description || ""
+        ),
+        model: String(
+          data.model || "OpenAI"
+        ),
+        count,
+        points,
+        createdAt: Date.now()
+      };
+
+      item.mindspacePlacedAccessoriesV3.push(
+        accessory
+      );
+
+      console.log(
+        "[Mindspace] AI 定位配件已成功附著",
+        {
+          targetId,
+          feature: accessory.feature,
+          count,
+          points
+        }
+      );
+
+      window.dispatchEvent(
+        new CustomEvent(
+          "mindspace:ai-accessory-added",
+          {
+            detail: {
+              targetId,
+              feature: accessory.feature,
+              count,
+              model: accessory.model
+            }
+          }
+        )
+      );
+
+      return {
+        success: true,
+        targetId,
+        accessoryId: accessory.id,
+        count
+      };
+    };
+
+  function drawPoint(accessory, point, item, index) {
+    const px = point.x * item.w;
+    const py = point.y * item.h;
+
+    const w = point.width * item.w;
+    const h = point.height * item.h;
+
+    const wing = isWing(accessory.feature);
+
+    const flap = wing
+      ? Math.sin(
+          worldTime * 7 +
+          index * 0.65
+        ) * 0.24
+      : 0;
+
+    push();
+
+    translate(px, py);
+    rotate(point.angle + flap);
+
+    if (point.mirror) {
+      scale(-1, 1);
+    }
+
+    imageMode(CENTER);
+
+    image(
+      accessory.image,
+      0,
+      0,
+      w,
+      h
+    );
+
+    pop();
+  }
+
+  function drawAccessoryLayer(item, layer) {
+    const accessories =
+      item.mindspacePlacedAccessoriesV3;
+
+    if (
+      !Array.isArray(accessories) ||
+      accessories.length === 0
+    ) {
+      return;
+    }
+
+    push();
+
+    translate(item.x, item.y);
+
+    for (const accessory of accessories) {
+      accessory.points.forEach(
+        (point, index) => {
+          if (point.layer !== layer) return;
+
+          drawPoint(
+            accessory,
+            point,
+            item,
+            index
+          );
+        }
+      );
+    }
+
+    pop();
+  }
+
+  // 保留舊版 drawCreation 的所有內容。
+  // 只在其前後增加 AI 配件圖層。
+  drawCreation = function(item) {
+    drawAccessoryLayer(item, "back");
+
+    previousDrawCreation(item);
+
+    drawAccessoryLayer(item, "front");
+  };
+
+  console.log(
+    "[Mindspace] AI 定位 PNG 配件 V3 已載入"
+  );
+
+})();
