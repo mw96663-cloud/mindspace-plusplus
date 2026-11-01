@@ -2651,18 +2651,31 @@ async function submitMindspaceCommand(inputText) {
         operations
       );
 
-    if (
-      execution === false ||
-      execution?.success === false ||
-      (
-        typeof execution?.applied === "number" &&
-        execution.applied === 0
-      )
-    ) {
-      throw new Error(
-        "OpenAI 已回覆，但角色變化未成功套用。"
-      );
-    }
+    
+console.log(
+  "[Mindspace] AI 指令實際執行結果",
+  execution
+);
+
+if (
+  execution === false ||
+  execution?.success === false ||
+  (
+    typeof execution?.applied === "number" &&
+    execution.applied === 0
+  )
+) {
+  const details =
+    Array.isArray(execution?.errors)
+      ? execution.errors.filter(Boolean).join("；")
+      : "";
+
+  throw new Error(
+    details ||
+    "OpenAI 已回覆，但角色變化未成功套用。"
+  );
+}
+
 
     const reply =
       result.reply ||
