@@ -3050,3 +3050,224 @@ window.performMindspaceAction = function(command) {
     "[Mindspace] 自主移動與 AI 指令執行模組已載入"
   );
 })();
+
+/* =====================================================
+   MINDSPACE AI FULL-SCREEN BACKGROUND
+   保留原本的世界、角色與互動系統
+===================================================== */
+
+(function () {
+  "use strict";
+
+  const state = {
+    image: null,
+    description: "",
+    loading: false,
+    generation: 0,
+    enabled: false,
+    error: null
+  };
+
+  // 保存原本的背景繪製函式
+  const originalDrawBackground = drawBackground;
+
+  // 保存原本的世界區域繪製函式
+  const originalDrawWorldZones = drawWorldZones;
+
+  /*
+   * 將圖片以 cover 模式填滿整個畫布。
+   * 保留原始比例，超出的部分裁切。
+   */
+  function drawCover(img) {
+    if (!img || !img.width || !img.height) {
+      return false;
+    }
+
+    const scale = Math.max(
+      width / img.width,
+      height / img.height
+    );
+
+    const w = img.width * scale;
+    const h = img.height * scale;
+
+    push();
+
+    imageMode(CENTER);
+
+    image(
+      img,
+      width / 2,
+      height / 2,
+      w,
+      h
+    );
+
+    pop();
+
+    return true;
+  }
+
+  /*
+   * 取代背景層，不改動原本 draw()。
+   */
+  drawBackground = function () {
+    if (state.enabled && state.image) {
+      if (drawCover(state.image)) {
+        return;
+      }
+    }
+
+    // 尚未有 AI 背景時使用原本世界
+    originalDrawBackground();
+  };
+
+  /*
+   * AI 背景已經包含場景時，
+   * 不重複繪製舊的固定世界區域。
+   *
+   * 原本的實體環境、角色及特效
+   * 仍由 draw() 後續流程繪製。
+   */
+  drawWorldZones = function () {
+    if (state.enabled && state.image) {
+      return;
+    }
+
+    originalDrawWorldZones();
+  };
+
+  /*
+   * 從 OpenAI 回傳的 data URL 載入圖片。
+   *
+   * 只有圖片成功解碼後才切換背景，
+   * 避免生成中畫面變空白。
+   */
+  window.setMindspaceAIBackground =
+    function (imageData, description = "") {
+      return new Promise((resolve, reject) => {
+
+        if (
+          typeof imageData !== "string" ||
+          !imageData.startsWith("data:image/")
+        ) {
+          reject(
+            new Error("AI 背景不是有效的圖片資料")
+          );
+          return;
+        }
+
+        const generation = ++state.generation;
+
+        state.loading = true;
+        state.error = null;
+
+        loadImage(
+          imageData,
+
+          img => {
+            // 較舊的請求不能覆蓋新背景
+            if (generation !== state.generation) {
+              resolve({
+                success: false,
+                superseded: true
+              });
+              return;
+            }
+
+            state.image = img;
+            state.description =
+              String(description || "");
+
+            state.enabled = true;
+            state.loading = false;
+
+            console.log(
+              "[Mindspace] AI 背景載入成功",
+              img.width,
+              img.height
+            );
+
+            resolve({
+              success: true,
+              width: img.width,
+              height: img.height,
+              description: state.description
+            });
+          },
+
+          error => {
+            if (generation === state.generation) {
+              state.loading = false;
+              state.error =
+                "AI 背景圖片解碼失敗";
+            }
+
+            reject(
+              new Error(
+                "AI 背景圖片載入失敗：" +
+                String(error || "")
+              )
+            );
+          }
+        );
+      });
+    };
+
+  /*
+   * 關閉 AI 背景時恢復原本世界。
+   * 不刪除任何積木角色。
+   */
+  window.disableMindspaceAIBackground =
+    function () {
+      state.enabled = false;
+    };
+
+  window.enableMindspaceAIBackground =
+    function () {
+      if (state.image) {
+        state.enabled = true;
+        return true;
+      }
+
+      return false;
+    };
+
+  /*
+   * 查詢目前背景狀態
+   */
+  window.getMindspaceAIBackgroundState =
+    function () {
+      return {
+        enabled: state.enabled,
+        loading: state.loading,
+        hasImage: !!state.image,
+        description: state.description,
+        error: state.error
+      };
+    };
+
+  /*
+   * 清空世界時同步清除背景。
+   * 只有使用者主動清空才執行。
+   */
+  const originalClear =
+    window.clearMindspaceWorld;
+
+  if (typeof originalClear === "function") {
+    window.clearMindspaceWorld = function (...args) {
+      state.generation++;
+      state.image = null;
+      state.description = "";
+      state.loading = false;
+      state.enabled = false;
+      state.error = null;
+
+      return originalClear(...args);
+    };
+  }
+
+  console.log(
+    "[Mindspace] AI 滿版背景繪製模組已載入"
+  );
+})();
