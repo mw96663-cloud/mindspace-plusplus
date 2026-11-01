@@ -435,6 +435,16 @@ section h2 {
     class="floatButton primary"
     title="工作台"
   >🧺</button>
+  
+<button
+  id="bubbleFullscreen"
+  class="floatButton"
+  type="button"
+  title="切換全螢幕"
+  aria-label="進入全螢幕"
+  aria-pressed="false"
+>⛶</button>
+
 </nav>
 
 <aside id="sidebar">
@@ -2616,8 +2626,7 @@ function startCommandVoice() {
       "error"
     );
 
-    $("sidebar").classList.add("open");
-
+   
     return;
   }
 
@@ -2629,8 +2638,7 @@ function startCommandVoice() {
       "error"
     );
 
-    $("sidebar").classList.add("open");
-
+  
     return;
   }
 
@@ -2776,23 +2784,24 @@ function startCommandVoice() {
 $("micButton").onclick =
   startCommandVoice;
 
+
 $("bubbleMic").onclick = () => {
   const classificationOpen =
     !$("classificationModal")
       .classList.contains("hidden");
 
+  // 正在辨識新作品時，使用作品描述語音
   if (classificationOpen) {
     startCreationVoice();
     return;
   }
 
-  if (!commandListening) {
-    $("sidebar").classList.add("open");
-    updateCommandSelection();
-  }
-
+  // 一般情況直接使用自由語音
+  // 不開啟工作台
+  updateCommandSelection();
   startCommandVoice();
 };
+
 
 /* =====================================================
    20｜初始化
@@ -3096,6 +3105,80 @@ connectBridge();
   console.log(
     "[Mindspace] AI 背景生成控制已載入"
   );
+})();
+
+/* =====================================================
+   MINDSPACE｜全螢幕泡泡按鈕
+===================================================== */
+
+(function () {
+  "use strict";
+
+  const button =
+    document.getElementById("bubbleFullscreen");
+
+  if (!button) {
+    console.error(
+      "[Mindspace] 找不到全螢幕泡泡按鈕"
+    );
+    return;
+  }
+
+  function updateFullscreenButton() {
+    const isFullscreen =
+      !!document.fullscreenElement;
+
+    button.textContent =
+      isFullscreen ? "⤢" : "⛶";
+
+    button.title =
+      isFullscreen
+        ? "離開全螢幕"
+        : "進入全螢幕";
+
+    button.setAttribute(
+      "aria-label",
+      button.title
+    );
+
+    button.setAttribute(
+      "aria-pressed",
+      String(isFullscreen)
+    );
+  }
+
+  button.addEventListener(
+    "click",
+    async function () {
+      try {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        } else {
+          await document.documentElement
+            .requestFullscreen();
+        }
+
+      } catch (error) {
+        console.error(
+          "[Mindspace] 全螢幕切換失敗",
+          error
+        );
+
+        if (typeof say === "function") {
+          say(
+            "無法切換全螢幕，請確認瀏覽器權限。"
+          );
+        }
+      }
+    }
+  );
+
+  document.addEventListener(
+    "fullscreenchange",
+    updateFullscreenButton
+  );
+
+  updateFullscreenButton();
 })();
 
 </script>
