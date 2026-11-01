@@ -3271,3 +3271,342 @@ window.performMindspaceAction = function(command) {
     "[Mindspace] AI 滿版背景繪製模組已載入"
   );
 })();
+
+/* =====================================================
+   MINDSPACE｜AI Plus-Plus Blueprint Renderer
+   不覆蓋原始 PNG、角色技能或既有配角
+===================================================== */
+
+(function () {
+  "use strict";
+
+  const blueprints = new Map();
+
+  function validColor(value) {
+    return (
+      typeof value === "string" &&
+      /^#[0-9a-fA-F]{6}$/.test(value)
+    )
+      ? value
+      : "#FFCF5D";
+  }
+
+  function normalizeGrid(grid) {
+    if (!Array.isArray(grid)) return [];
+
+    return grid.slice(0, 32).map(row => {
+      if (typeof row === "string") {
+        return row.slice(0, 32).split("");
+      }
+
+      if (Array.isArray(row)) {
+        return row.slice(0, 32);
+      }
+
+      return [];
+    });
+  }
+
+  function normalizeBlueprint(data) {
+    if (!data || typeof data !== "object") {
+      return null;
+    }
+
+    const grid = normalizeGrid(data.grid);
+
+    if (!grid.length) return null;
+
+    const palette = Array.isArray(data.palette)
+      ? data.palette.slice(0, 16)
+          .map(validColor)
+      : ["#FFCF5D"];
+
+    return {
+      grid,
+      palette,
+      feature: String(data.feature || ""),
+      anchor: String(data.anchor || ""),
+      motion: String(data.motion || ""),
+      scale: Number(data.scale) || 1
+    };
+  }
+
+  function findTarget(operation) {
+    const id =
+      operation.targetId ||
+      window.mindspaceSelectedId;
+
+    return window.mindspaceCreations?.find(
+      item => item.id === id
+    ) || null;
+  }
+
+  function saveBlueprints(operations) {
+    for (const operation of operations) {
+      if (
+        !operation ||
+        operation.type !== "appearance" ||
+        !operation.plusBlueprint
+      ) {
+        continue;
+      }
+
+      const target = findTarget(operation);
+
+      if (!target || target.kind !== "character") {
+        continue;
+      }
+
+      const blueprint =
+        normalizeBlueprint(
+          operation.plusBlueprint
+        );
+
+      if (!blueprint) continue;
+
+      const list =
+        blueprints.get(target.id) || [];
+
+      list.push(blueprint);
+
+      blueprints.set(
+        target.id,
+        list.slice(-12)
+      );
+    }
+  }
+
+  function getAnchorPosition(
+    blueprint,
+    item
+  ) {
+    const anchor =
+      blueprint.anchor.toLowerCase();
+
+    if (/left|左/.test(anchor)) {
+      return {
+        x: -item.w * .48,
+        y: -item.h * .08
+      };
+    }
+
+    if (/right|右/.test(anchor)) {
+      return {
+        x: item.w * .48,
+        y: -item.h * .08
+      };
+    }
+
+    if (/top|head|上|頭/.test(anchor)) {
+      return {
+        x: 0,
+        y: -item.h * .52
+      };
+    }
+
+    if (/bottom|tail|下|尾/.test(anchor)) {
+      return {
+        x: 0,
+        y: item.h * .42
+      };
+    }
+
+    return {
+      x: 0,
+      y: 0
+    };
+  }
+
+  function drawBlueprint(
+    blueprint,
+    item,
+    index
+  ) {
+    const grid = blueprint.grid;
+
+    const rows = grid.length;
+    const cols = Math.max(
+      1,
+      ...grid.map(row => row.length)
+    );
+
+    const maxDimension =
+      Math.max(rows, cols);
+
+    const size =
+      Math.max(
+        5,
+        Math.min(
+          16,
+          Math.min(item.w, item.h) /
+            maxDimension *
+            Math.max(
+              .4,
+              Math.min(2, blueprint.scale)
+            )
+        )
+      );
+
+    const anchor =
+      getAnchorPosition(blueprint, item);
+
+    push();
+
+    translate(
+      item.x + anchor.x,
+      item.y + anchor.y
+    );
+
+    // 積木配件具有輕微自主動畫。
+    const time =
+      typeof worldTime === "number"
+        ? worldTime
+        : 0;
+
+    const motion =
+      blueprint.motion.toLowerCase();
+
+    if (/flap|wing|翅|拍/.test(motion)) {
+      rotate(Math.sin(time * 5 + index) * .13);
+    } else if (/swing|tail|擺|尾/.test(motion)) {
+      rotate(Math.sin(time * 3 + index) * .18);
+    } else if (/float|浮|飄/.test(motion)) {
+      translate(
+        0,
+        Math.sin(time * 2 + index) * 5
+      );
+    }
+
+    for (let y = 0; y < rows; y++) {
+      for (
+        let x = 0;
+        x < grid[y].length;
+        x++
+      ) {
+        const cell = grid[y][x];
+
+        if (
+          cell === null ||
+          cell === 0 ||
+          cell === "0" ||
+          cell === "." ||
+          cell === " " ||
+          cell === false
+        ) {
+          continue;
+        }
+
+        let colorIndex = 0;
+
+        if (
+          typeof cell === "number"
+        ) {
+          colorIndex = Math.max(
+            0,
+            cell - 1
+          );
+        } else if (
+          /^[1-9]$/.test(String(cell))
+        ) {
+          colorIndex =
+            Number(cell) - 1;
+        }
+
+        const color =
+          blueprint.palette[
+            colorIndex %
+            blueprint.palette.length
+          ] || "#FFCF5D";
+
+        plusBlock(
+          (x - (cols - 1) / 2) * size,
+          (y - (rows - 1) / 2) * size,
+          size * 1.05,
+          color
+        );
+      }
+    }
+
+    pop();
+  }
+
+  // 包裝原本的 AI 操作執行器。
+  const originalApply =
+    window.applyMindspaceAIOperations;
+
+  if (typeof originalApply === "function") {
+    window.applyMindspaceAIOperations =
+      function (operations) {
+        const result =
+          originalApply(operations);
+
+        const commit = execution => {
+          if (
+            execution &&
+            execution.success !== false &&
+            Array.isArray(operations)
+          ) {
+            saveBlueprints(operations);
+          }
+
+          return execution;
+        };
+
+        return result &&
+          typeof result.then === "function"
+          ? result.then(commit)
+          : commit(result);
+      };
+  }
+
+  // 在原本角色繪製完成後，疊加積木藍圖。
+  const originalDrawCreation =
+    drawCreation;
+
+  drawCreation = function (item) {
+    originalDrawCreation(item);
+
+    const list =
+      blueprints.get(item.id);
+
+    if (!list || item.kind !== "character") {
+      return;
+    }
+
+    list.forEach((blueprint, index) => {
+      drawBlueprint(
+        blueprint,
+        item,
+        index
+      );
+    });
+  };
+
+  // 清空世界時移除積木藍圖。
+  const originalClear =
+    window.clearMindspaceWorld;
+
+  if (typeof originalClear === "function") {
+    window.clearMindspaceWorld =
+      function (...args) {
+        blueprints.clear();
+
+        return originalClear(...args);
+      };
+  }
+
+  window.getMindspaceBlueprintCount =
+    function () {
+      let count = 0;
+
+      for (const list of blueprints.values()) {
+        count += list.length;
+      }
+
+      return count;
+    };
+
+  console.log(
+    "[Mindspace] AI Plus-Plus Blueprint Renderer 已載入"
+  );
+})();
