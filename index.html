@@ -4217,5 +4217,376 @@ stopButton.onclick = stopGuide;
 })();
 </script>
 
+<script>
+/* =========================================================
+   MINDSPACE｜AI BACKGROUND VOICE V1
+
+   功能：
+   1. 背景文字輸入框旁新增語音按鈕
+   2. 使用瀏覽器真實語音辨識 zh-TW
+   3. 辨識結果可修改
+   4. 可選擇語音結束後自動生成
+   5. 沿用現有 OpenAI 背景生成流程
+   6. 不修改原本角色與 AI 引導
+========================================================= */
+
+(function () {
+  "use strict";
+
+  const input = document.getElementById(
+    "mindspaceBackgroundInput"
+  );
+
+  const generateButton = document.getElementById(
+    "mindspaceGenerateBackground"
+  );
+
+  const status = document.getElementById(
+    "mindspaceBackgroundStatus"
+  );
+
+  if (!input || !generateButton || !status) {
+    console.error(
+      "[Mindspace] 找不到 AI 背景生成介面"
+    );
+    return;
+  }
+
+  // 防止重複安裝
+  if (document.getElementById(
+    "mindspaceBackgroundVoice"
+  )) {
+    return;
+  }
+
+  const Recognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+  const wrapper = document.createElement("div");
+
+  wrapper.id = "mindspaceBackgroundVoice";
+
+  wrapper.style.cssText = `
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin:10px 0 14px;
+  `;
+
+  wrapper.innerHTML = `
+    <button
+      id="mindspaceBackgroundMic"
+      type="button"
+      class="action"
+      style="
+        background:#e5f1fc;
+        margin:0;
+      "
+    >
+      🎙️ 說出我的想像世界
+    </button>
+
+    <label style="
+      display:flex;
+      align-items:center;
+      gap:9px;
+      font-size:13px;
+      color:#546a82;
+      cursor:pointer;
+    ">
+      <input
+        id="mindspaceBackgroundAutoGenerate"
+        type="checkbox"
+        style="
+          width:17px;
+          height:17px;
+          flex:none;
+        "
+      >
+      說完後自動交給 OpenAI 生成背景
+    </label>
+
+    <div
+      id="mindspaceBackgroundVoiceStatus"
+      aria-live="polite"
+      style="
+        font-size:12px;
+        line-height:1.6;
+        color:#65788d;
+      "
+    >
+      可以用語音描述世界，也可以直接打字。
+    </div>
+  `;
+
+  input.insertAdjacentElement(
+    "afterend",
+    wrapper
+  );
+
+  const micButton = document.getElementById(
+    "mindspaceBackgroundMic"
+  );
+
+  const autoCheckbox = document.getElementById(
+    "mindspaceBackgroundAutoGenerate"
+  );
+
+  const voiceStatus = document.getElementById(
+    "mindspaceBackgroundVoiceStatus"
+  );
+
+  let recognition = null;
+  let listening = false;
+  let cancelled = false;
+  let hadError = false;
+  let finalTranscript = "";
+  let originalText = "";
+
+  function setVoiceStatus(message) {
+    voiceStatus.textContent = message;
+  }
+
+  function updateMicButton() {
+    micButton.textContent = listening
+      ? "⏹️ 結束說話"
+      : "🎙️ 說出我的想像世界";
+
+    micButton.style.background = listening
+      ? "#ffe0d8"
+      : "#e5f1fc";
+
+    micButton.setAttribute(
+      "aria-pressed",
+      String(listening)
+    );
+  }
+
+  function stopListening(cancel = false) {
+    if (!recognition) return;
+
+    cancelled = cancel;
+
+    try {
+      if (cancel) {
+        recognition.abort();
+      } else {
+        recognition.stop();
+      }
+    } catch (error) {
+      console.warn(
+        "[Mindspace] 停止背景語音辨識：",
+        error
+      );
+    }
+  }
+
+  function startListening() {
+    if (listening) {
+      stopListening(false);
+      return;
+    }
+
+    if (!Recognition) {
+      setVoiceStatus(
+        "此瀏覽器不支援語音辨識，請使用最新版 Chrome 或 Edge。"
+      );
+      return;
+    }
+
+    if (generateButton.disabled) {
+      setVoiceStatus(
+        "背景正在生成，請等待完成後再說話。"
+      );
+      return;
+    }
+
+    cancelled = false;
+    hadError = false;
+    finalTranscript = "";
+    originalText = input.value.trim();
+
+    const session = new Recognition();
+
+    recognition = session;
+
+    session.lang = "zh-TW";
+    session.continuous = false;
+    session.interimResults = true;
+    session.maxAlternatives = 1;
+
+    session.onstart = function () {
+      listening = true;
+      updateMicButton();
+
+      // 避免語音朗讀干擾辨識
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+
+      setVoiceStatus(
+        "🎙️ 正在聆聽，請說出你想創造的世界……"
+      );
+    };
+
+    session.onresult = function (event) {
+      let confirmed = "";
+      let interim = "";
+
+      for (
+        let i = 0;
+        i < event.results.length;
+        i++
+      ) {
+        const result = event.results[i];
+
+        const words =
+          result[0]?.transcript || "";
+
+        if (result.isFinal) {
+          confirmed += words;
+        } else {
+          interim += words;
+        }
+      }
+
+      finalTranscript = confirmed.trim();
+
+      const spoken = (
+        confirmed + interim
+      ).trim();
+
+      input.value = [
+        originalText,
+        spoken
+      ].filter(Boolean).join("\n");
+
+      setVoiceStatus(
+        "辨識內容：" + spoken
+      );
+    };
+
+    session.onerror = function (event) {
+      hadError = true;
+
+      const messages = {
+        "not-allowed":
+          "麥克風權限被拒絕，請允許網站使用麥克風。",
+        "audio-capture":
+          "找不到可用的麥克風。",
+        "no-speech":
+          "沒有偵測到語音，請再試一次。",
+        "network":
+          "語音辨識網路連線失敗。",
+        "aborted":
+          "已取消語音辨識。"
+      };
+
+      setVoiceStatus(
+        messages[event.error] ||
+        "語音辨識失敗：" + event.error
+      );
+    };
+
+    session.onend = function () {
+      if (recognition !== session) {
+        return;
+      }
+
+      recognition = null;
+      listening = false;
+
+      updateMicButton();
+
+      if (cancelled || hadError) {
+        return;
+      }
+
+      const description =
+        input.value.trim();
+
+      if (!description) {
+        setVoiceStatus(
+          "沒有取得有效描述，請重新說話。"
+        );
+        return;
+      }
+
+      setVoiceStatus(
+        "✅ 語音辨識完成，可以修改文字或生成背景。"
+      );
+
+      if (autoCheckbox.checked) {
+        if (
+          typeof window.generateMindspaceWorldAI
+          !== "function"
+        ) {
+          setVoiceStatus(
+            "背景 AI 生成函式尚未準備完成。"
+          );
+          return;
+        }
+
+        setVoiceStatus(
+          "✨ 正在將你的語音想像交給 OpenAI……"
+        );
+
+        Promise.resolve(
+          window.generateMindspaceWorldAI(
+            description
+          )
+        ).catch(function (error) {
+          console.error(
+            "[Mindspace] 背景語音生成失敗",
+            error
+          );
+
+          setVoiceStatus(
+            "背景生成失敗：" +
+            (error?.message || String(error))
+          );
+        });
+      }
+    };
+
+    try {
+      session.start();
+    } catch (error) {
+      recognition = null;
+      listening = false;
+
+      updateMicButton();
+
+      setVoiceStatus(
+        "無法啟動麥克風：" + error.message
+      );
+    }
+  }
+
+  micButton.addEventListener(
+    "click",
+    startListening
+  );
+
+  // 手動點擊生成時，先停止語音辨識
+  generateButton.addEventListener(
+    "click",
+    function () {
+      if (listening) {
+        stopListening(true);
+      }
+    },
+    true
+  );
+
+  updateMicButton();
+
+  console.log(
+    "[Mindspace] AI 背景語音模組已載入"
+  );
+})();
+</script>
+
 </body>
 </html>
