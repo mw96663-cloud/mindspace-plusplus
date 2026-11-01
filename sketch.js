@@ -3606,6 +3606,451 @@ window.performMindspaceAction = function(command) {
       return count;
     };
 
+/* =========================================================
+   MINDSPACE｜PLUS-PLUS BLUEPRINT RENDERER
+   角色積木造型 + 碰牆轉向
+   不修改原始 PNG
+========================================================= */
+
+(function () {
+  "use strict";
+
+  const previousApply =
+    window.applyMindspaceAIOperations;
+
+  const previousDrawCreation =
+    drawCreation;
+
+  if (
+    typeof previousApply !== "function" ||
+    typeof previousDrawCreation !== "function"
+  ) {
+    console.error(
+      "[Mindspace] 原始 AI 指令或繪製器尚未載入"
+    );
+    return;
+  }
+
+  const PALETTE_KEYS = "ABCDEFGH";
+
+  function validBlueprint(bp) {
+    return !!(
+      bp &&
+      bp.success === true &&
+      Array.isArray(bp.grid) &&
+      bp.grid.length > 0 &&
+      Array.isArray(bp.palette) &&
+      bp.palette.length > 0
+    );
+  }
+
+  function getBlueprintColor(bp, char) {
+    const index = PALETTE_KEYS.indexOf(char);
+
+    if (
+      index < 0 ||
+      index >= bp.palette.length
+    ) {
+      return null;
+    }
+
+    const color = bp.palette[index];
+
+    return /^#[0-9a-f]{6}$/i.test(color)
+      ? color
+      : null;
+  }
+
+  function drawBlueprintGrid(bp, targetW, targetH) {
+    const rows = bp.grid.length;
+
+    const cols = Math.max(
+      1,
+      ...bp.grid.map(row =>
+        String(row).length
+      )
+    );
+
+    const cell = Math.max(
+      2,
+      Math.min(
+        targetW / cols,
+        targetH / rows
+      )
+    );
+
+    const offsetX = -cols * cell / 2;
+    const offsetY = -rows * cell / 2;
+
+    for (let y = 0; y < rows; y++) {
+      const row = String(bp.grid[y]);
+
+      for (let x = 0; x < row.length; x++) {
+        const color =
+          getBlueprintColor(bp, row[x]);
+
+        if (!color) continue;
+
+        plusBlock(
+          offsetX + (x + .5) * cell,
+          offsetY + (y + .5) * cell,
+          cell * .94,
+          color,
+          0
+        );
+      }
+    }
+  }
+
+  function getAttachmentPosition(
+    feature,
+    item,
+    index,
+    count
+  ) {
+    const name = String(
+      feature.feature ||
+      feature.description ||
+      ""
+    ).toLowerCase();
+
+    const placement = String(
+      feature.placement || ""
+    ).toLowerCase();
+
+    const side =
+      index % 2 === 0 ? -1 : 1;
+
+    const layer =
+      Math.floor(index / 2);
+
+    if (
+      /wing|翅膀|翅/.test(name)
+    ) {
+      return {
+        x: side * item.w * .46,
+        y: -item.h * .12 +
+          layer * item.h * .10,
+        angle: side * .18,
+        mirror: side === 1
+      };
+    }
+
+    if (
+      /horn|角/.test(name) ||
+      placement === "head"
+    ) {
+      return {
+        x:
+          (index - (count - 1) / 2) *
+          Math.min(22, item.w / (count + 1)),
+        y: -item.h * .52,
+        angle: 0,
+        mirror: false
+      };
+    }
+
+    if (
+      /tail|尾巴/.test(name)
+    ) {
+      return {
+        x: item.w * .47,
+        y: item.h * .10 +
+          index * 10,
+        angle: .2,
+        mirror: false
+      };
+    }
+
+    if (
+      /tentacle|觸手/.test(name)
+    ) {
+      return {
+        x:
+          (index - (count - 1) / 2) *
+          Math.min(18, item.w / (count + 1)),
+        y: item.h * .50,
+        angle: 0,
+        mirror: false
+      };
+    }
+
+    const angle =
+      TWO_PI * index / count;
+
+    return {
+      x: Math.cos(angle) * item.w * .5,
+      y: Math.sin(angle) * item.h * .5,
+      angle,
+      mirror: false
+    };
+  }
+
+  function drawBlueprintFeature(feature, item) {
+    const bp = feature.plusBlueprint;
+
+    if (!validBlueprint(bp)) {
+      return;
+    }
+
+    const count = Math.min(
+      30,
+      Math.max(
+        1,
+        Math.round(
+          Number(feature.count) || 1
+        )
+      )
+    );
+
+    const targetW =
+      Math.max(22, item.w * .35);
+
+    const targetH =
+      Math.max(18, item.h * .35);
+
+    for (let i = 0; i < count; i++) {
+      const position =
+        getAttachmentPosition(
+          feature,
+          item,
+          i,
+          count
+        );
+
+      const motion = String(
+        bp.motion || "none"
+      );
+
+      const phase =
+        worldTime * 5 + i * .7;
+
+      let animation = 0;
+
+      if (motion === "flap") {
+        animation =
+          Math.sin(phase) * .28;
+      } else if (
+        motion === "swing" ||
+        motion === "wave"
+      ) {
+        animation =
+          Math.sin(phase) * .17;
+      } else if (motion === "rotate") {
+        animation = worldTime * .8;
+      }
+
+      let pulse = 1;
+
+      if (motion === "pulse") {
+        pulse =
+          1 + Math.sin(phase) * .10;
+      }
+
+      let bounceY = 0;
+
+      if (motion === "bounce") {
+        bounceY =
+          -Math.abs(Math.sin(phase)) * 7;
+      }
+
+      push();
+
+      translate(
+        position.x,
+        position.y + bounceY
+      );
+
+      rotate(
+        position.angle +
+        animation *
+        (i % 2 === 0 ? -1 : 1)
+      );
+
+      if (position.mirror) {
+        scale(-1, 1);
+      }
+
+      const blueprintScale =
+        Math.min(
+          2.5,
+          Math.max(
+            .4,
+            Number(bp.scale) || 1
+          )
+        );
+
+      scale(
+        blueprintScale * pulse
+      );
+
+      drawBlueprintGrid(
+        bp,
+        targetW,
+        targetH
+      );
+
+      pop();
+    }
+  }
+
+  /* -----------------------------------------------------
+     將 AI 產生的藍圖保存到角色身上
+  ----------------------------------------------------- */
+
+  window.applyMindspaceAIOperations =
+    function (operations) {
+      const result =
+        previousApply(operations);
+
+      if (
+        !Array.isArray(operations) ||
+        !result ||
+        result.applied <= 0
+      ) {
+        return result;
+      }
+
+      const allCreations =
+        typeof creations !== "undefined"
+          ? creations
+          : [];
+
+      for (const operation of operations) {
+        if (
+          operation?.type !== "appearance" ||
+          !validBlueprint(
+            operation.plusBlueprint
+          )
+        ) {
+          continue;
+        }
+
+        const targetId =
+          operation.targetId ||
+          window.mindspaceSelectedId;
+
+        const item = allCreations.find(
+          creation =>
+            creation.id === targetId
+        );
+
+        if (!item) continue;
+
+        if (!Array.isArray(
+          item.mindspaceBlueprintFeatures
+        )) {
+          item.mindspaceBlueprintFeatures = [];
+        }
+
+        item.mindspaceBlueprintFeatures.push({
+          feature: operation.feature,
+          description: operation.description,
+          count: operation.count,
+          color: operation.color,
+          placement: operation.placement,
+          plusBlueprint: operation.plusBlueprint
+        });
+
+        item.mindspaceBlueprintFeatures =
+          item.mindspaceBlueprintFeatures.slice(-20);
+      }
+
+      return result;
+    };
+
+  /* -----------------------------------------------------
+     原始角色 PNG + AI 積木藍圖
+     角色轉向時一起水平翻轉
+  ----------------------------------------------------- */
+
+  drawCreation = function (item) {
+    const direction =
+      Number(item.aiDirection) < 0
+        ? -1
+        : 1;
+
+    const features =
+      Array.isArray(
+        item.mindspaceBlueprintFeatures
+      )
+        ? item.mindspaceBlueprintFeatures
+        : [];
+
+    // 保留原本 PNG 與技能繪製器，
+    // 同時讓整個角色朝向移動方向。
+    push();
+
+    translate(item.x, item.y);
+    scale(direction, 1);
+    translate(-item.x, -item.y);
+
+    previousDrawCreation(item);
+
+    // 藍圖積木附加於角色身體座標。
+    if (features.length) {
+      push();
+
+      translate(item.x, item.y);
+
+      for (const feature of features) {
+        drawBlueprintFeature(
+          feature,
+          item
+        );
+      }
+
+      pop();
+    }
+
+    pop();
+  };
+
+  /* -----------------------------------------------------
+     角色邊界方向修正
+     沿用原本 updateCreation 的碰牆反彈，
+     這裡額外確保圖片方向正確。
+  ----------------------------------------------------- */
+
+  const previousUpdateCreation =
+    updateCreation;
+
+  updateCreation = function (item) {
+    previousUpdateCreation(item);
+
+    if (
+      !item ||
+      item.kind !== "character" ||
+      item === dragging
+    ) {
+      return;
+    }
+
+    const margin = 12;
+
+    const minX =
+      item.w / 2 + margin;
+
+    const maxX =
+      Math.max(
+        minX,
+        width - item.w / 2 - margin
+      );
+
+    if (item.x <= minX) {
+      item.x = minX;
+      item.aiDirection = 1;
+    } else if (item.x >= maxX) {
+      item.x = maxX;
+      item.aiDirection = -1;
+    }
+  };
+
+  console.log(
+    "[Mindspace] Plus-Plus 藍圖與碰牆轉向已載入"
+  );
+})();
+
   console.log(
     "[Mindspace] AI Plus-Plus Blueprint Renderer 已載入"
   );
