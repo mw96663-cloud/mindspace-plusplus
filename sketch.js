@@ -4919,3 +4919,227 @@ case "appearance": {
   );
 
 })();
+
+/* =====================================================
+   MINDSPACE｜MANUAL ACCESSORY + ENVIRONMENT V4
+
+   1. 孩子自由放置 OpenAI PNG 配件
+   2. 配件跟隨角色移動與旋轉
+   3. AI 環境完成後隱藏原始環境照片
+   4. 保留原始角色與其他功能
+===================================================== */
+
+(function () {
+  "use strict";
+
+  const loadAccessoryImage = dataURL =>
+    new Promise((resolve, reject) => {
+      loadImage(
+        dataURL,
+        resolve,
+        () => reject(
+          new Error("無法載入 OpenAI 配件 PNG")
+        )
+      );
+    });
+
+  function findCreation(id) {
+    return creations.find(
+      item => String(item.id) === String(id)
+    );
+  }
+
+  // 只有 Environment 可以被隱藏。
+  // 不刪除圖片或創作資料。
+  window.hideMindspaceEnvironmentOriginal =
+    function(id) {
+      const item = findCreation(id);
+
+      if (!item || item.kind !== "environment") {
+        return false;
+      }
+
+      const background =
+        window.getMindspaceAIBackgroundState?.();
+
+      if (
+        !background ||
+        !background.enabled ||
+        !background.hasImage
+      ) {
+        return false;
+      }
+
+      item.mindspaceEnvironmentOriginalHidden = true;
+
+      console.log(
+        "[Mindspace] 環境原始照片已隱藏",
+        id
+      );
+
+      return true;
+    };
+
+  window.showMindspaceEnvironmentOriginal =
+    function(id) {
+      const item = findCreation(id);
+      if (!item) return false;
+
+      item.mindspaceEnvironmentOriginalHidden = false;
+      return true;
+    };
+
+  // 保存孩子確認的配件位置。
+  window.attachMindspaceManualAccessory =
+    async function(data) {
+
+      const item = findCreation(data?.targetId);
+
+      if (!item || item.kind !== "character") {
+        throw new Error("找不到要附著配件的角色");
+      }
+
+      if (
+        typeof data.image !== "string" ||
+        !data.image.startsWith(
+          "data:image/png;base64,"
+        )
+      ) {
+        throw new Error("缺少 OpenAI 透明 PNG");
+      }
+
+      if (!Array.isArray(data.parts) ||
+          !data.parts.length) {
+        throw new Error("尚未設定配件位置");
+      }
+
+      const img = await loadAccessoryImage(
+        data.image
+      );
+
+      if (!Array.isArray(item.manualAIAccessories)) {
+        item.manualAIAccessories = [];
+      }
+
+      const parts = data.parts.map(part => {
+        const x = Number(part.x);
+        const y = Number(part.y);
+        const scale = Number(part.scale);
+        const angle = Number(part.angle);
+
+        if (
+          ![x, y, scale, angle].every(
+            Number.isFinite
+          ) ||
+          scale <= 0
+        ) {
+          throw new Error("配件座標或尺寸無效");
+        }
+
+        return {
+          x,
+          y,
+          scale,
+          angle
+        };
+      });
+
+      item.manualAIAccessories.push({
+        id: crypto.randomUUID(),
+        img,
+        feature: String(
+          data.feature || "accessory"
+        ),
+        parts
+      });
+
+      return {
+        success: true,
+        count: parts.length
+      };
+    };
+
+  function drawManualAccessories(item) {
+    if (
+      !Array.isArray(item.manualAIAccessories) ||
+      !item.manualAIAccessories.length
+    ) {
+      return;
+    }
+
+    push();
+    translate(item.x, item.y);
+
+    // 與原始角色使用相同的擺動角度。
+    if (item.kind === "character") {
+      const amount =
+        item.movement === "swim"
+          ? .12
+          : item.movement === "run"
+            ? .06
+            : .045;
+
+      rotate(
+        sin(worldTime * 1.4 + item.phase) *
+        amount
+      );
+    }
+
+    imageMode(CENTER);
+
+    for (const accessory of
+      item.manualAIAccessories) {
+
+      for (const part of accessory.parts) {
+        push();
+
+        translate(
+          part.x * item.w,
+          part.y * item.h
+        );
+
+        rotate(part.angle);
+
+        const displayWidth =
+          item.w * part.scale;
+
+        const imageRatio =
+          accessory.img.height /
+          Math.max(1, accessory.img.width);
+
+        image(
+          accessory.img,
+          0,
+          0,
+          displayWidth,
+          displayWidth * imageRatio
+        );
+
+        pop();
+      }
+    }
+
+    pop();
+  }
+
+  const previousDrawCreation = drawCreation;
+
+  drawCreation = function(item) {
+    if (
+      item.kind === "environment" &&
+      item.mindspaceEnvironmentOriginalHidden
+    ) {
+      return;
+    }
+
+    previousDrawCreation(item);
+
+    if (item.kind === "character") {
+      drawManualAccessories(item);
+    }
+  };
+
+  console.log(
+    "[Mindspace] 手動配件與環境隱藏 V4 已載入"
+  );
+})();
