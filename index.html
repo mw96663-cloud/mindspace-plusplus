@@ -2804,6 +2804,300 @@ updateCommandSelection();
 
 connectBridge();
 
+/* =====================================================
+   21｜AI 滿版背景生成控制
+   Mindspace Plus-Plus
+
+   保留原本的：
+   - 拍照與 AI 去背
+   - 作品分類
+   - 語音與文字指令
+   - 多角色共存
+   - p5.js 互動
+===================================================== */
+
+(function () {
+  "use strict";
+
+  let backgroundBusy = false;
+
+  /*
+   * 建立背景生成控制區
+   * 放在 STEP 06 裡面。
+   */
+  const panel =
+    document.getElementById(
+      "mindspaceCommandPanel"
+    );
+
+  if (!panel) {
+    console.error(
+      "[Mindspace] 找不到 STEP 06"
+    );
+    return;
+  }
+
+  const section =
+    document.createElement("div");
+
+  section.id = "mindspaceBackgroundPanel";
+
+  section.style.cssText = [
+    "margin-top:20px",
+    "padding-top:18px",
+    "border-top:1px solid #e1e8f0"
+  ].join(";");
+
+  section.innerHTML = `
+    <h2>🌈 AI 想像世界背景</h2>
+
+    <p class="muted">
+      告訴 AI 你想創造什麼世界。
+      原本的積木角色不會消失。
+    </p>
+
+    <textarea
+      id="mindspaceBackgroundInput"
+      class="field"
+      rows="3"
+      placeholder="例如：紫色天空中的糖果森林，有彩虹瀑布和漂浮的積木城堡"
+    ></textarea>
+
+    <button
+      id="mindspaceGenerateBackground"
+      class="action primary"
+      type="button"
+    >
+      ✨ 生成我的想像世界
+    </button>
+
+    <button
+      id="mindspaceRestoreBackground"
+      class="action"
+      type="button"
+    >
+      ↶ 顯示原本的積木世界
+    </button>
+
+    <div
+      id="mindspaceBackgroundStatus"
+      aria-live="polite"
+      style="
+        padding:12px;
+        border-radius:12px;
+        background:#f1f5f9;
+        font-size:13px;
+        line-height:1.7;
+        margin-top:10px;
+        overflow-wrap:anywhere;
+      "
+    >
+      等待你的世界描述。
+    </div>
+  `;
+
+  panel.appendChild(section);
+
+  const input =
+    document.getElementById(
+      "mindspaceBackgroundInput"
+    );
+
+  const generateButton =
+    document.getElementById(
+      "mindspaceGenerateBackground"
+    );
+
+  const restoreButton =
+    document.getElementById(
+      "mindspaceRestoreBackground"
+    );
+
+  const status =
+    document.getElementById(
+      "mindspaceBackgroundStatus"
+    );
+
+  function updateStatus(message, error = false) {
+    status.textContent = message;
+
+    status.style.background =
+      error ? "#fff0ec" : "#f1f5f9";
+
+    status.style.color =
+      error ? "#a2382c" : "#25374e";
+  }
+
+  /*
+   * 透過原本的 GAS Bridge
+   * 呼叫真正的 OpenAI 圖片生成。
+   */
+  async function generateBackground(description) {
+    const text =
+      String(description || "").trim();
+
+    if (!text) {
+      updateStatus(
+        "請先描述你想要的世界。",
+        true
+      );
+      return false;
+    }
+
+    if (backgroundBusy) {
+      return false;
+    }
+
+    if (!bridgeReady) {
+      updateStatus(
+        "OpenAI Bridge 尚未連線，請稍候。",
+        true
+      );
+      return false;
+    }
+
+    if (
+      typeof window.setMindspaceAIBackground !==
+      "function"
+    ) {
+      updateStatus(
+        "sketch.js 的背景模組尚未載入。",
+        true
+      );
+      return false;
+    }
+
+    backgroundBusy = true;
+    generateButton.disabled = true;
+
+    updateStatus(
+      "正在請 OpenAI 生成 Plus-Plus 想像世界，請稍候……"
+    );
+
+    try {
+      /*
+       * 真實 OpenAI 呼叫
+       * 由 Code.gs 生成 PNG。
+       */
+      const result = await requestAI(
+        "generateWorldBackgroundAI",
+        {
+          description: text,
+          theme: text,
+          worldType: "fantasy",
+          elements: []
+        },
+        180000
+      );
+
+      if (
+        !result ||
+        result.success !== true ||
+        result.provider !== "OpenAI" ||
+        typeof result.image !== "string" ||
+        !result.image.startsWith(
+          "data:image/png;base64,"
+        )
+      ) {
+        throw new Error(
+          "OpenAI 沒有回傳有效的背景 PNG"
+        );
+      }
+
+      updateStatus(
+        "AI 已生成圖片，正在載入互動世界……"
+      );
+
+      /*
+       * 將 AI 背景交給 sketch.js。
+       * 不會清空原本角色。
+       */
+      const loaded =
+        await window.setMindspaceAIBackground(
+          result.image,
+          text
+        );
+
+      if (!loaded || !loaded.success) {
+        throw new Error(
+          "背景圖片沒有成功顯示"
+        );
+      }
+
+      updateStatus(
+        "✨ 你的想像世界已經生成！" +
+        "\n" +
+        "原本的積木角色會繼續生活在世界裡。"
+      );
+
+      return true;
+
+    } catch (error) {
+      const message =
+        error && error.message
+          ? error.message
+          : String(error);
+
+      console.error(
+        "[Mindspace] AI 背景生成失敗",
+        error
+      );
+
+      updateStatus(
+        "背景生成失敗：" + message,
+        true
+      );
+
+      return false;
+
+    } finally {
+      backgroundBusy = false;
+      generateButton.disabled = false;
+    }
+  }
+
+  /*
+   * 手動生成背景
+   */
+  generateButton.addEventListener(
+    "click",
+    () => {
+      generateBackground(input.value);
+    }
+  );
+
+  /*
+   * 恢復原本的 p5.js 世界
+   * 不刪除 AI 圖片或任何角色。
+   */
+  restoreButton.addEventListener(
+    "click",
+    () => {
+      if (
+        typeof window.disableMindspaceAIBackground ===
+        "function"
+      ) {
+        window.disableMindspaceAIBackground();
+
+        updateStatus(
+          "已切換回原本的積木世界。"
+        );
+      }
+    }
+  );
+
+  /*
+   * 提供其他模組使用。
+   * 後續語音與分類系統可呼叫。
+   */
+  window.generateMindspaceWorldAI =
+    generateBackground;
+
+  console.log(
+    "[Mindspace] AI 背景生成控制已載入"
+  );
+})();
+
 </script>
 
 <script src="./sketch.js"></script>
