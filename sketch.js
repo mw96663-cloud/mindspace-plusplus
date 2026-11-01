@@ -1,26 +1,14 @@
 
 /*
  * Mindspace Plus-Plus
- * sketch.js | World Fusion v3
+ * sketch.js
+ * 第四階段第一步：角色選取與控制
  *
- * 保留：
- * - 原始積木 PNG
- * - 多角色共存
- * - AI 角色動作
- * - Environment 作品
- * - 3 秒特效
- * - 拖曳
- * - 原本前端呼叫介面
- *
- * 新增：
- * - Character 也生成世界
- * - AI 身分決定場景
- * - AI 身分決定移動
- * - Plus-Plus 積木風格
- * - 不同世界逐漸融合
+ * 保留原始積木 PNG、AI 分類、世界融合、
+ * 環境特效、拖曳、多作品共存。
  *
  * 本檔不直接呼叫 OpenAI。
- * AI 資料由現有 index.html + GAS 提供。
+ * 真實 AI 連線由 index.html / GAS 處理。
  */
 
 const creations = [];
@@ -33,6 +21,9 @@ window.mindspaceWorldZones = worldZones;
 
 let worldTime = 0;
 let activeEffects = [];
+let selectedCreationId = null;
+
+window.mindspaceSelectedId = null;
 
 let dragging = null;
 let dragDX = 0;
@@ -95,7 +86,7 @@ const WORLD_STYLES = {
 };
 
 /* =====================================
-   01. 初始化
+   01｜初始化
 ===================================== */
 
 function setup() {
@@ -137,16 +128,16 @@ function draw() {
   }
 
   drawEffects();
+  drawSelectionIndicator();
 }
 
 /* =====================================
-   02. AI 世界判斷
+   02｜世界類型
 ===================================== */
 
 function detectWorldType(text) {
   const s = String(text || "").toLowerCase();
 
-  // 特殊想像優先於普通動物身分。
   if (/月亮|月球|太空|宇宙|moon|space/.test(s)) {
     return "moon";
   }
@@ -195,7 +186,6 @@ function normalizeWorldType(value, fallbackText) {
 function createOrUpdateWorld(item, aiData) {
   const env = aiData?.environment || {};
 
-  // 優先使用 AI 回傳的世界類型。
   const worldType = normalizeWorldType(
     env.worldType,
     [
@@ -234,7 +224,6 @@ function createOrUpdateWorld(item, aiData) {
   item.worldType = worldType;
   item.worldZoneId = item.id;
 
-  // 每個新世界加入時播放一次特效。
   startEnvironmentEffect(
     env.effect || "sparkle",
     item.x,
@@ -243,7 +232,7 @@ function createOrUpdateWorld(item, aiData) {
 }
 
 /* =====================================
-   03. Plus-Plus 風格積木繪製
+   03｜Plus-Plus 積木繪製
 ===================================== */
 
 function plusBlock(x, y, size, c, angle = 0) {
@@ -254,7 +243,6 @@ function plusBlock(x, y, size, c, angle = 0) {
 
   rectMode(CENTER);
   noStroke();
-
   fill(c);
 
   rect(
@@ -322,7 +310,7 @@ function plusRing(
 }
 
 /* =====================================
-   04. 積木環境物件
+   04｜積木環境物件
 ===================================== */
 
 function drawPlusTree(x, y, scale) {
@@ -599,11 +587,10 @@ function drawPlusSun(x, y, scale) {
 }
 
 /* =====================================
-   05. 世界融合背景
+   05｜世界融合背景
 ===================================== */
 
 function drawBackground() {
-  // 沒有任何作品時，顯示中性的想像空間。
   if (worldZones.length === 0) {
     background("#DCECF6");
 
@@ -620,7 +607,6 @@ function drawBackground() {
     return;
   }
 
-  // 使用每個世界的天空色建立連續漸層。
   const count = worldZones.length;
 
   noStroke();
@@ -630,6 +616,7 @@ function drawBackground() {
       const pos = x / max(1, width);
 
       const zonePos = pos * count - .5;
+
       const leftIndex = constrain(
         floor(zonePos),
         0,
@@ -722,11 +709,9 @@ function drawWorldZones() {
     const cx = layout.centerX;
     const y = layout.groundY;
     const w = layout.zoneWidth;
-
     const style = WORLD_STYLES[zone.type];
 
     push();
-
     noStroke();
 
     fill(style.ground);
@@ -881,7 +866,7 @@ function drawWorldZones() {
 }
 
 /* =====================================
-   06. 氛圍粒子
+   06｜氛圍粒子
 ===================================== */
 
 function drawAmbientParticles() {
@@ -907,7 +892,7 @@ function drawAmbientParticles() {
 }
 
 /* =====================================
-   07. 原始積木進入世界
+   07｜原始積木進入世界
 ===================================== */
 
 window.addMindspaceCreation = function(dataURL) {
@@ -975,12 +960,18 @@ window.addMindspaceCreation = function(dataURL) {
           environmentData: null,
 
           rotation: random(-.04, .04),
-          directionTimer: 0
+          directionTimer: 0,
+
+          childAction: null,
+          visualEffects: [],
+          originalPNG: dataURL
         };
 
         item.baseY = item.y;
 
         creations.push(item);
+
+        window.selectMindspaceCreation(item.id);
 
         window.updateMindspaceCount?.(
           creations.length
@@ -997,7 +988,7 @@ window.addMindspaceCreation = function(dataURL) {
 };
 
 /* =====================================
-   08. 套用 AI 分類
+   08｜套用 AI 分類
 ===================================== */
 
 window.applyMindspaceClassification =
@@ -1045,17 +1036,12 @@ function(id, kind, description, aiData) {
       );
     }
 
-    // 核心升級：
-    // Character 和 Environment
-    // 都可以帶來自己的世界。
     createOrUpdateWorld(
       item,
       aiData
     );
 
   } else {
-    // 沒有 AI 回覆時，保留基本互動。
-    // 不宣稱這是 AI 生成的內容。
     if (kind === "character") {
       applyCharacterData(item, {
         movement: "float",
@@ -1076,10 +1062,10 @@ function(id, kind, description, aiData) {
   }
 
   return true;
-};
+}
 
 /* =====================================
-   09. AI 角色行為
+   09｜AI 角色資料
 ===================================== */
 
 function applyCharacterData(item, data) {
@@ -1123,7 +1109,6 @@ function applyCharacterData(item, data) {
 
   item.directionTimer = random(2, 5);
 
-  // 地面型角色初始位置移至地面。
   if ([
     "run", "walk", "crawl", "bounce"
   ].includes(item.movement)) {
@@ -1135,7 +1120,6 @@ function applyCharacterData(item, data) {
     item.y = item.baseY;
   }
 
-  // 飛行角色從天空開始。
   if ([
     "fly", "hover"
   ].includes(item.movement)) {
@@ -1147,155 +1131,90 @@ function applyCharacterData(item, data) {
   }
 }
 
+/* =====================================
+   10｜角色待機與孩子動作
+===================================== */
+
 function updateCreation(item) {
   if (dragging === item) return;
 
-  if (item.kind === "environment") {
-    item.y =
-      item.baseY +
-      sin(worldTime * .5 + item.phase) * 3;
+  const idle =
+    Math.sin(worldTime * 1.4 + item.phase) * 2;
+
+  if (
+    !item.childAction ||
+    worldTime >= item.childAction.until
+  ) {
+    item.childAction = null;
+    item.y = item.baseY + idle;
     return;
   }
 
-  const speed = item.speed || 1;
-  const energy = item.energy ?? .5;
-  const t = worldTime;
-
-  const groundY = constrain(
-    height * .87 - item.h / 2,
-    item.h / 2 + 10,
-    height - item.h / 2 - 15
+  const action = item.childAction;
+  const t = worldTime - action.started;
+  const speed = Math.max(
+    0.2,
+    Number(action.speed) || 1
   );
 
-  // 未分類作品沿用原本的漂浮行為。
-  if (item.kind !== "character") {
-    item.x += item.vx * .45;
-    item.y =
-      item.baseY +
-      sin(t + item.phase) *
-      item.floatRange;
-  } else {
+  switch (action.type) {
+    case "fly":
+    case "hover":
+      item.y =
+        item.baseY -
+        22 +
+        Math.sin(t * 3 * speed) * 14;
+      break;
 
-    switch (item.movement) {
-      case "run":
-        item.baseY = groundY;
-        item.x += item.vx * 1.6;
+    case "swim":
+      item.x += Math.cos(t * 2) * speed;
+      item.y =
+        item.baseY +
+        Math.sin(t * 3) * 13;
+      break;
 
-        item.y =
-          groundY -
-          abs(
-            sin(
-              t * (6 + speed * 2) +
-              item.phase
-            )
-          ) * (4 + energy * 16);
-        break;
+    case "jump":
+    case "bounce":
+      item.y =
+        item.baseY -
+        Math.abs(
+          Math.sin(t * 4 * speed)
+        ) * 42;
+      break;
 
-      case "walk":
-        item.baseY = groundY;
-        item.x += item.vx * .65;
+    case "walk":
+    case "run":
+      item.x +=
+        action.direction *
+        speed *
+        (action.type === "run" ? 2 : .8);
 
-        item.y =
-          groundY -
-          abs(
-            sin(
-              t * (3 + speed) +
-              item.phase
-            )
-          ) * (2 + energy * 7);
-        break;
+      item.y =
+        item.baseY -
+        Math.abs(
+          Math.sin(t * 8 * speed)
+        ) * 5;
+      break;
 
-      case "crawl":
-        item.baseY = groundY;
-        item.x += item.vx * .25;
-
-        item.y =
-          groundY +
-          sin(t * 3 + item.phase) * 2;
-        break;
-
-      case "bounce":
-        item.baseY = groundY;
-        item.x += item.vx * .8;
-
-        item.y =
-          groundY -
-          abs(
-            sin(
-              t * (2 + speed) +
-              item.phase
-            )
-          ) * (20 + energy * 55);
-        break;
-
-      case "swim":
-        item.x += item.vx;
-
-        item.y =
-          item.baseY +
-          sin(
-            t * (1.8 + speed) +
-            item.phase
-          ) * (8 + energy * 18);
-        break;
-
-      case "fly":
-        item.x += item.vx * 1.3;
-
-        item.y =
-          item.baseY +
-          sin(
-            t * (1.2 + speed) +
-            item.phase
-          ) * (20 + energy * 35);
-        break;
-
-      case "hover":
-        item.x += item.vx * .25;
-
-        item.y =
-          item.baseY +
-          sin(
-            t * (1.5 + speed) +
-            item.phase
-          ) * (15 + energy * 20);
-        break;
-
-      default:
-        item.x += item.vx * .45;
-
-        item.y =
-          item.baseY +
-          sin(
-            t * (1 + speed) +
-            item.phase
-          ) * item.floatRange;
-        break;
-    }
+    default:
+      item.y = item.baseY + idle;
   }
 
-  // 保留在畫面範圍內。
-  const margin = item.w / 2 + 12;
-
-  if (item.x < margin) {
-    item.x = margin;
-    item.vx = abs(item.vx);
-  }
-
-  if (item.x > width - margin) {
-    item.x = width - margin;
-    item.vx = -abs(item.vx);
-  }
+  item.x = constrain(
+    item.x,
+    item.w / 2,
+    width - item.w / 2
+  );
 
   item.y = constrain(
     item.y,
-    item.h / 2 + 10,
-    height - item.h / 2 - 15
+    item.h / 2,
+    height - item.h / 2
   );
 }
 
 /* =====================================
-   10. 原始積木繪製
+   11｜繪製原始積木
 ===================================== */
 
 function drawCreation(item) {
@@ -1328,7 +1247,6 @@ function drawCreation(item) {
   drawingContext.shadowBlur = 16;
   drawingContext.shadowOffsetY = 8;
 
-  // 不修改圖片、不重新生成角色。
   image(
     item.img,
     0,
@@ -1341,7 +1259,7 @@ function drawCreation(item) {
 }
 
 /* =====================================
-   11. Environment 資料
+   12｜環境資料
 ===================================== */
 
 function applyEnvironmentData(item, data) {
@@ -1504,7 +1422,7 @@ function drawEnvironmentElement(
 }
 
 /* =====================================
-   12. 三秒環境特效
+   13｜三秒環境特效
 ===================================== */
 
 function startEnvironmentEffect(type, x, y) {
@@ -1557,7 +1475,6 @@ function drawEffects() {
       255 * (1 - progress);
 
     push();
-
     noStroke();
 
     for (const p of effect.particles) {
@@ -1656,7 +1573,7 @@ function drawStar(x, y, r1, r2, points) {
 }
 
 /* =====================================
-   13. 拖曳作品
+   14｜點選與拖曳作品
 ===================================== */
 
 function mousePressed() {
@@ -1687,6 +1604,8 @@ function mousePressed() {
       mouseY > item.y - item.h / 2 &&
       mouseY < item.y + item.h / 2
     ) {
+      window.selectMindspaceCreation(item.id);
+
       dragging = item;
 
       dragDX = mouseX - item.x;
@@ -1708,14 +1627,21 @@ function mouseDragged() {
 }
 
 function mouseReleased() {
+  if (dragging) {
+    dragging.baseY = dragging.y;
+  }
+
   dragging = null;
 }
 
 /* =====================================
-   14. 清空世界
+   15｜清空世界
 ===================================== */
 
 window.clearMindspaceWorld = function() {
+  selectedCreationId = null;
+  window.mindspaceSelectedId = null;
+
   creations.length = 0;
   environments.length = 0;
   worldZones.length = 0;
@@ -1725,7 +1651,7 @@ window.clearMindspaceWorld = function() {
 };
 
 /* =====================================
-   15. 視窗大小調整
+   16｜視窗尺寸
 ===================================== */
 
 function windowResized() {
@@ -1756,7 +1682,7 @@ function windowResized() {
 }
 
 /* =====================================
-   16. 檢查 AI 世界資料
+   17｜公開世界狀態
 ===================================== */
 
 window.getMindspaceWorldState = function() {
@@ -1778,4 +1704,130 @@ window.getMindspaceWorldState = function() {
       elements: zone.elements
     }))
   };
+};
+
+/* =====================================
+   18｜角色查找與選取
+===================================== */
+
+window.getMindspaceCreation = id =>
+  creations.find(item => item.id === id) || null;
+
+window.selectMindspaceCreation = function(id) {
+  const item = window.getMindspaceCreation(id);
+
+  if (!item) return false;
+
+  selectedCreationId = id;
+  window.mindspaceSelectedId = id;
+
+  window.dispatchEvent(
+    new CustomEvent("mindspace:selection", {
+      detail: {
+        id,
+        kind: item.kind,
+        name: item.name
+      }
+    })
+  );
+
+  return true;
+};
+
+window.getSelectedMindspaceCreation = function() {
+  return window.getMindspaceCreation(
+    selectedCreationId
+  );
+};
+
+function drawSelectionIndicator() {
+  const item =
+    window.getSelectedMindspaceCreation();
+
+  if (!item) return;
+
+  push();
+
+  noFill();
+  stroke(255, 208, 92, 190);
+  strokeWeight(2);
+
+  ellipse(
+    item.x,
+    item.y,
+    item.w + 24,
+    item.h + 24
+  );
+
+  pop();
+}
+
+/* =====================================
+   19｜孩子動作指令
+===================================== */
+
+window.performMindspaceAction = function(command) {
+  if (
+    !command ||
+    typeof command !== "object"
+  ) {
+    return false;
+  }
+
+  const item = window.getMindspaceCreation(
+    command.targetId || selectedCreationId
+  );
+
+  if (
+    !item ||
+    item.kind !== "character"
+  ) {
+    return false;
+  }
+
+  const allowed = [
+    "fly",
+    "hover",
+    "swim",
+    "jump",
+    "bounce",
+    "walk",
+    "run",
+    "stop"
+  ];
+
+  if (!allowed.includes(command.type)) {
+    return false;
+  }
+
+  if (command.type === "stop") {
+    item.childAction = null;
+    item.y = item.baseY;
+    return true;
+  }
+
+  const duration = constrain(
+    Number(command.duration) || 4,
+    0.5,
+    30
+  );
+
+  item.childAction = {
+    type: command.type,
+    started: worldTime,
+    until: worldTime + duration,
+
+    speed: constrain(
+      Number(command.speed) || 1,
+      0.2,
+      3
+    ),
+
+    direction:
+      command.direction === "left"
+        ? -1
+        : 1
+  };
+
+  return true;
 };
