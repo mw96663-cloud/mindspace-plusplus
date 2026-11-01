@@ -4,58 +4,411 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+
 <title>Mindspace Plus-Plus｜想像有形</title>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.11/p5.min.js"></script>
+
 <style>
-*{box-sizing:border-box}
-html,body{width:100%;height:100%;margin:0}
-body{font-family:Arial,"Noto Sans TC",sans-serif;color:#25374e;background:#164c78;overflow:hidden}
-button,input,textarea{font:inherit}
-button{border:0;cursor:pointer}
-button:disabled{opacity:.55;cursor:wait}
-.hidden{display:none!important}
-#scene{position:fixed;inset:0}
-#scene canvas{display:block}
-#speechBubble{position:fixed;z-index:10;top:18px;left:50%;transform:translateX(-50%);padding:13px 20px;max-width:85vw;background:#fffffff0;border-radius:24px;text-align:center;box-shadow:0 5px 20px #0002;pointer-events:none;font-size:14px}
-#floatingControls{position:fixed;z-index:20;right:20px;bottom:20px;display:flex;flex-direction:column;gap:12px}
-.floatButton{width:60px;height:60px;border-radius:50%;background:white;font-size:26px;box-shadow:0 5px 20px #0003}
-.primary{background:#ffcf5d!important;color:#26364b!important}
-#sidebar{position:fixed;z-index:40;right:0;top:0;bottom:0;width:min(420px,100vw);background:white;box-shadow:-8px 0 30px #0003;display:flex;flex-direction:column;transform:translateX(105%);transition:transform .25s}
-#sidebar.open{transform:translateX(0)}
-.sidebarHeader{padding:18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e7edf4}
-.sidebarHeader h1{font-size:19px;margin:0}
-.sidebarBody{padding:20px;overflow-y:auto;flex:1}
-section{margin-bottom:26px}
-section h2{font-size:16px;margin:0 0 12px}
-.action{width:100%;padding:13px;margin:5px 0;border-radius:13px;background:#e5f1fc;color:#26364b;font-weight:600}
-.field{width:100%;padding:12px;border:1px solid #d7e0e9;border-radius:12px;margin:6px 0}
-.muted{font-size:13px;color:#65788d;line-height:1.7;overflow-wrap:anywhere}
-#status,#aiTestResult{padding:12px;border-radius:12px;background:#f1f5f9;font-size:13px;line-height:1.7;overflow-wrap:anywhere}
-#aiTestResult{white-space:pre-wrap;margin-top:8px;max-height:190px;overflow-y:auto}
-#status.success{background:#e4f7eb;color:#16643b}
-#status.error{background:#fff0ec;color:#a2382c}
-.modal{position:fixed;inset:0;z-index:80;background:#09182cdd;display:grid;place-items:center;padding:12px}
-.modalCard{width:min(700px,100%);max-height:96vh;overflow-y:auto;background:white;border-radius:24px;padding:20px}
-.modalCard h2{margin:0 0 12px;font-size:19px}
-#cameraVideo{display:block;width:100%;max-height:55vh;object-fit:contain;background:#e7eef5;border-radius:15px}
-.row{display:flex;gap:9px}
-.row>*{flex:1;min-width:0}
-#bridgeFrame{position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;border:0}
-#editArea{width:100%;height:min(48vh,420px);display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:15px;background-color:white;background-image:linear-gradient(45deg,#ddd 25%,transparent 25%),linear-gradient(-45deg,#ddd 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ddd 75%),linear-gradient(-45deg,transparent 75%,#ddd 75%);background-size:22px 22px;background-position:0 0,0 11px,11px -11px,-11px 0}
-#editCanvas{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;cursor:crosshair;touch-action:none}
-.toolRow{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
-.toolRow button{flex:1;min-width:85px;padding:11px 8px;border-radius:11px;background:#e8f0f7;color:#26364b}
-.toolRow button.active{background:#315eaa;color:white}
-.sliderRow{display:flex;align-items:center;gap:12px;margin:10px 0}
-.sliderRow input{flex:1}
-#classificationPreview{display:block;width:100%;height:175px;object-fit:contain;background:#e8edf3;border-radius:14px}
-.typeButton{flex:1;padding:16px 8px;border:2px solid #d8e1eb;background:#f5f8fc;border-radius:15px;font-weight:bold}
-.typeButton.selected{border-color:#315eaa;background:#dceaff}
-#aiSuggestion{padding:12px;background:#eef5ff;border-radius:12px;font-size:14px;line-height:1.7;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-#heroList{font-size:13px;color:#546a82;line-height:1.8}
-@media(max-width:600px){.floatButton{width:54px;height:54px}#floatingControls{right:12px;bottom:14px}#speechBubble{font-size:12px}.modalCard{padding:14px}}
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: Arial, "Noto Sans TC", sans-serif;
+  color: #25374e;
+  background: #164c78;
+  overflow: hidden;
+}
+
+button, input, textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.hidden {
+  display: none !important;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+}
+
+#scene canvas {
+  display: block;
+}
+
+#speechBubble {
+  position: fixed;
+  z-index: 10;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 13px 20px;
+  max-width: 85vw;
+  background: #fffffff0;
+  border-radius: 24px;
+  text-align: center;
+  box-shadow: 0 5px 20px #0002;
+  pointer-events: none;
+  font-size: 14px;
+}
+
+#floatingControls {
+  position: fixed;
+  z-index: 20;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.floatButton {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: white;
+  font-size: 26px;
+  box-shadow: 0 5px 20px #0003;
+}
+
+.floatButton.listening {
+  background: #ffe0d8;
+  animation: micPulse 1.2s infinite;
+}
+
+@keyframes micPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 #ff817766;
+  }
+  50% {
+    box-shadow: 0 0 0 12px #ff817700;
+  }
+}
+
+.primary {
+  background: #ffcf5d !important;
+  color: #26364b !important;
+}
+
+#sidebar {
+  position: fixed;
+  z-index: 40;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: min(420px, 100vw);
+  background: white;
+  box-shadow: -8px 0 30px #0003;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(105%);
+  transition: transform .25s;
+}
+
+#sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebarHeader {
+  padding: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e7edf4;
+}
+
+.sidebarHeader h1 {
+  font-size: 19px;
+  margin: 0;
+}
+
+.sidebarBody {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+section {
+  margin-bottom: 26px;
+}
+
+section h2 {
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+
+.action {
+  width: 100%;
+  padding: 13px;
+  margin: 5px 0;
+  border-radius: 13px;
+  background: #e5f1fc;
+  color: #26364b;
+  font-weight: 600;
+}
+
+.field {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d7e0e9;
+  border-radius: 12px;
+  margin: 6px 0;
+}
+
+.muted {
+  font-size: 13px;
+  color: #65788d;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+#status,
+#aiTestResult,
+#mindspaceCommandStatus {
+  padding: 12px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+#aiTestResult {
+  white-space: pre-wrap;
+  margin-top: 8px;
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+#status.success,
+#mindspaceCommandStatus.success {
+  background: #e4f7eb;
+  color: #16643b;
+}
+
+#status.error,
+#mindspaceCommandStatus.error {
+  background: #fff0ec;
+  color: #a2382c;
+}
+
+#mindspaceCommandStatus {
+  margin-top: 10px;
+  white-space: pre-wrap;
+}
+
+#mindspaceCommandSelection {
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff5d6;
+  color: #71572b;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+#chatInput {
+  resize: vertical;
+  min-height: 90px;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: #09182cdd;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+}
+
+.modalCard {
+  width: min(700px, 100%);
+  max-height: 96vh;
+  overflow-y: auto;
+  background: white;
+  border-radius: 24px;
+  padding: 20px;
+}
+
+.modalCard h2 {
+  margin: 0 0 12px;
+  font-size: 19px;
+}
+
+#cameraVideo {
+  display: block;
+  width: 100%;
+  max-height: 55vh;
+  object-fit: contain;
+  background: #e7eef5;
+  border-radius: 15px;
+}
+
+.row {
+  display: flex;
+  gap: 9px;
+}
+
+.row > * {
+  flex: 1;
+  min-width: 0;
+}
+
+#bridgeFrame {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+}
+
+#editArea {
+  width: 100%;
+  height: min(48vh, 420px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 15px;
+  background-color: white;
+  background-image:
+    linear-gradient(45deg, #ddd 25%, transparent 25%),
+    linear-gradient(-45deg, #ddd 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ddd 75%),
+    linear-gradient(-45deg, transparent 75%, #ddd 75%);
+  background-size: 22px 22px;
+  background-position:
+    0 0,
+    0 11px,
+    11px -11px,
+    -11px 0;
+}
+
+#editCanvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.toolRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 12px 0;
+}
+
+.toolRow button {
+  flex: 1;
+  min-width: 85px;
+  padding: 11px 8px;
+  border-radius: 11px;
+  background: #e8f0f7;
+  color: #26364b;
+}
+
+.toolRow button.active {
+  background: #315eaa;
+  color: white;
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+}
+
+.sliderRow input {
+  flex: 1;
+}
+
+#classificationPreview {
+  display: block;
+  width: 100%;
+  height: 175px;
+  object-fit: contain;
+  background: #e8edf3;
+  border-radius: 14px;
+}
+
+.typeButton {
+  flex: 1;
+  padding: 16px 8px;
+  border: 2px solid #d8e1eb;
+  background: #f5f8fc;
+  border-radius: 15px;
+  font-weight: bold;
+}
+
+.typeButton.selected {
+  border-color: #315eaa;
+  background: #dceaff;
+}
+
+#aiSuggestion {
+  padding: 12px;
+  background: #eef5ff;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.7;
+  margin: 10px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#heroList {
+  font-size: 13px;
+  color: #546a82;
+  line-height: 1.8;
+}
+
+@media (max-width: 600px) {
+  .floatButton {
+    width: 54px;
+    height: 54px;
+  }
+
+  #floatingControls {
+    right: 12px;
+    bottom: 14px;
+  }
+
+  #speechBubble {
+    font-size: 12px;
+  }
+
+  .modalCard {
+    padding: 14px;
+  }
+}
 </style>
 </head>
+
 <body>
 
 <main id="scene"></main>
@@ -65,133 +418,382 @@ section h2{font-size:16px;margin:0 0 12px}
 </div>
 
 <nav id="floatingControls">
-  <button id="bubbleCamera" class="floatButton" title="拍攝作品">📷</button>
-  <button id="bubbleMic" class="floatButton" title="語音創作">🎙️</button>
-  <button id="bubbleWorkbench" class="floatButton primary" title="工作台">🧺</button>
+  <button
+    id="bubbleCamera"
+    class="floatButton"
+    title="拍攝作品"
+  >📷</button>
+
+  <button
+    id="bubbleMic"
+    class="floatButton"
+    title="語音自由創造"
+  >🎙️</button>
+
+  <button
+    id="bubbleWorkbench"
+    class="floatButton primary"
+    title="工作台"
+  >🧺</button>
 </nav>
 
 <aside id="sidebar">
   <header class="sidebarHeader">
     <h1>🧺 Mindspace 工作台</h1>
-    <button id="closeWorkbench" class="floatButton" style="width:38px;height:38px;font-size:21px">×</button>
+
+    <button
+      id="closeWorkbench"
+      class="floatButton"
+      style="width:38px;height:38px;font-size:21px"
+    >×</button>
   </header>
+
   <div class="sidebarBody">
+
     <section>
       <h2>🔌 OpenAI 真實連線</h2>
-      <div id="status">正在連接 Bridge……</div>
-      <button id="testBridge" class="action primary">測試 OpenAI 真實連線</button>
-      <button id="reloadBridge" class="action">重新連接 Bridge</button>
-      <div id="aiTestResult">等待測試。</div>
+
+      <div id="status">
+        正在連接 Bridge……
+      </div>
+
+      <button
+        id="testBridge"
+        class="action primary"
+      >
+        測試 OpenAI 真實連線
+      </button>
+
+      <button
+        id="reloadBridge"
+        class="action"
+      >
+        重新連接 Bridge
+      </button>
+
+      <div id="aiTestResult">
+        等待測試。
+      </div>
     </section>
 
     <section>
       <h2>STEP 01｜自由拼接</h2>
-      <p class="muted">孩子可以創造任何角色、建築、地形或想像中的物件。</p>
+
+      <p class="muted">
+        孩子可以創造任何角色、建築、地形或想像中的物件。
+      </p>
     </section>
 
     <section>
       <h2>STEP 02｜拍照與 AI 去背</h2>
-      <button id="openCamera" class="action primary">📷 開啟攝影機</button>
-      <button id="uploadPhoto" class="action">🖼️ 上傳照片</button>
-      <input id="photoFile" type="file" accept="image/*" class="hidden">
-      <p class="muted">去背成功後，可以用橡皮擦、恢復筆刷及復原功能調整圖片。</p>
+
+      <button
+        id="openCamera"
+        class="action primary"
+      >
+        📷 開啟攝影機
+      </button>
+
+      <button
+        id="uploadPhoto"
+        class="action"
+      >
+        🖼️ 上傳照片
+      </button>
+
+      <input
+        id="photoFile"
+        type="file"
+        accept="image/*"
+        class="hidden"
+      >
+
+      <p class="muted">
+        去背成功後，可以用橡皮擦、恢復筆刷及復原功能調整圖片。
+      </p>
     </section>
 
     <section>
       <h2>STEP 03～05｜共同世界</h2>
-      <div id="heroList">目前還沒有作品。</div>
-      <button id="clearWorld" class="action">清空目前世界</button>
+
+      <div id="heroList">
+        目前還沒有作品。
+      </div>
+
+      <button
+        id="clearWorld"
+        class="action"
+      >
+        清空目前世界
+      </button>
     </section>
 
-    <section>
-      <h2>STEP 06｜語音自由創造</h2>
-      <p class="muted">下一階段加入語音變身、技能、配角、環境修改與故事。</p>
-      <textarea id="chatInput" class="field" rows="2" placeholder="例如：讓我的龍長出彩虹翅膀"></textarea>
-      <button id="micButton" class="action">🎙️ 語音創作（下一階段）</button>
+    <section id="mindspaceCommandPanel">
+      <h2>STEP 06｜我的想像指令</h2>
+
+      <p class="muted">
+        點選世界中的積木角色，再告訴它要做什麼。
+        你可以用文字或語音自由創造。
+      </p>
+
+      <div id="mindspaceCommandSelection">
+        🎯 請先選取世界中的角色
+      </div>
+
+      <textarea
+        id="chatInput"
+        class="field"
+        rows="3"
+        placeholder="例如：我的小狗會在天上飛、讓牠跑步、長出彩虹翅膀"
+      ></textarea>
+
+      <button
+        id="mindspaceCommandSend"
+        class="action primary"
+      >
+        ✨ 讓我的想像成真
+      </button>
+
+      <button
+        id="micButton"
+        class="action"
+      >
+        🎙️ 說出我的想像
+      </button>
+
+      <div
+        id="mindspaceCommandStatus"
+        aria-live="polite"
+      >
+        等待你的創作指令。
+      </div>
     </section>
+
   </div>
 </aside>
 
 <!-- 攝影機 -->
 <div id="cameraModal" class="modal hidden">
   <div class="modalCard">
+
     <h2>📷 拍攝 Plus-Plus 積木</h2>
-    <video id="cameraVideo" autoplay playsinline muted></video>
-    <p id="cameraMessage" class="muted">將作品放在畫面中央。</p>
-    <button id="captureButton" class="action primary">拍照</button>
-    <button id="switchCamera" class="action">切換鏡頭</button>
-    <button id="closeCamera" class="action">關閉</button>
+
+    <video
+      id="cameraVideo"
+      autoplay
+      playsinline
+      muted
+    ></video>
+
+    <p id="cameraMessage" class="muted">
+      將作品放在畫面中央。
+    </p>
+
+    <button
+      id="captureButton"
+      class="action primary"
+    >
+      拍照
+    </button>
+
+    <button
+      id="switchCamera"
+      class="action"
+    >
+      切換鏡頭
+    </button>
+
+    <button
+      id="closeCamera"
+      class="action"
+    >
+      關閉
+    </button>
+
   </div>
 </div>
 
 <!-- 去背與修圖 -->
 <div id="editorModal" class="modal hidden">
   <div class="modalCard">
+
     <h2>✨ 積木去背與修圖</h2>
-    <div id="editArea"><canvas id="editCanvas"></canvas></div>
-    <p id="editorMessage" class="muted">準備進行 AI 去背。</p>
-    <button id="removeBgAI" class="action primary">開始 AI 去背</button>
+
+    <div id="editArea">
+      <canvas id="editCanvas"></canvas>
+    </div>
+
+    <p id="editorMessage" class="muted">
+      準備進行 AI 去背。
+    </p>
+
+    <button
+      id="removeBgAI"
+      class="action primary"
+    >
+      開始 AI 去背
+    </button>
 
     <div id="editTools" class="hidden">
+
       <div class="toolRow">
-        <button id="eraserTool" class="active">🧽 橡皮擦</button>
-        <button id="restoreTool">🖌️ 恢復筆刷</button>
+        <button id="eraserTool" class="active">
+          🧽 橡皮擦
+        </button>
+
+        <button id="restoreTool">
+          🖌️ 恢復筆刷
+        </button>
       </div>
+
       <div class="sliderRow">
         <label for="brushSize">筆刷</label>
-        <input id="brushSize" type="range" min="5" max="120" value="30">
+
+        <input
+          id="brushSize"
+          type="range"
+          min="5"
+          max="120"
+          value="30"
+        >
+
         <span id="brushSizeValue">30</span>
       </div>
+
       <div class="toolRow">
         <button id="undoEdit">↶ 復原</button>
         <button id="redoEdit">↷ 重做</button>
         <button id="resetEdit">重設修圖</button>
       </div>
-      <button id="saveEditor" class="action primary">✓ 完成修圖，加入世界</button>
+
+      <button
+        id="saveEditor"
+        class="action primary"
+      >
+        ✓ 完成修圖，加入世界
+      </button>
+
     </div>
 
-    <button id="closeEditor" class="action">取消</button>
+    <button
+      id="closeEditor"
+      class="action"
+    >
+      取消
+    </button>
+
   </div>
 </div>
 
 <!-- AI 角色／環境判斷 -->
 <div id="classificationModal" class="modal hidden">
   <div class="modalCard">
+
     <h2>🌟 你創造了什麼？</h2>
-    <img id="classificationPreview" alt="積木作品">
-    <p class="muted">先告訴 AI 你的想像。AI 會提出建議，但最後由你決定。</p>
 
-    <textarea id="classificationDescription" class="field" rows="3"
-      placeholder="例如：這是一隻會在天空游泳的魚，牠很害羞"></textarea>
+    <img
+      id="classificationPreview"
+      alt="積木作品"
+    >
 
-    <button id="classificationMic" class="action">🎙️ 按這裡，說出你的想像</button>
-    <p id="classificationVoiceStatus" class="muted" aria-live="polite">按麥克風後說出作品的身分、能力與生活環境。</p>
+    <p class="muted">
+      先告訴 AI 你的想像。
+      AI 會提出建議，但最後由你決定。
+    </p>
 
-    <button id="analyzeCreationAI" class="action primary">✨ 讓 AI 理解我的作品</button>
+    <textarea
+      id="classificationDescription"
+      class="field"
+      rows="3"
+      placeholder="例如：這是一隻會在天空游泳的魚，牠很害羞"
+    ></textarea>
 
-    <div id="aiSuggestion">等待孩子描述作品。</div>
+    <button
+      id="classificationMic"
+      class="action"
+    >
+      🎙️ 按這裡，說出你的想像
+    </button>
 
-    <p class="muted">你可以接受 AI 的判斷，也可以自己更正：</p>
-    <div class="row">
-      <button id="classifyCharacter" class="typeButton">🐉 Character<br>角色</button>
-      <button id="classifyEnvironment" class="typeButton">🏰 Environment<br>環境</button>
+    <p
+      id="classificationVoiceStatus"
+      class="muted"
+      aria-live="polite"
+    >
+      按麥克風後說出作品的身分、能力與生活環境。
+    </p>
+
+    <button
+      id="analyzeCreationAI"
+      class="action primary"
+    >
+      ✨ 讓 AI 理解我的作品
+    </button>
+
+    <div id="aiSuggestion">
+      等待孩子描述作品。
     </div>
 
-    <p id="classificationMessage" class="muted">請選擇角色或環境。</p>
-    <button id="confirmClassification" class="action primary">確認我的創作</button>
-    <button id="skipClassification" class="action">稍後再決定</button>
+    <p class="muted">
+      你可以接受 AI 的判斷，也可以自己更正：
+    </p>
+
+    <div class="row">
+      <button
+        id="classifyCharacter"
+        class="typeButton"
+      >
+        🐉 Character
+        角色
+      </button>
+
+      <button
+        id="classifyEnvironment"
+        class="typeButton"
+      >
+        🏰 Environment
+        環境
+      </button>
+    </div>
+
+    <p id="classificationMessage" class="muted">
+      請選擇角色或環境。
+    </p>
+
+    <button
+      id="confirmClassification"
+      class="action primary"
+    >
+      確認我的創作
+    </button>
+
+    <button
+      id="skipClassification"
+      class="action"
+    >
+      稍後再決定
+    </button>
+
   </div>
 </div>
 
-<iframe id="bridgeFrame" title="Mindspace AI Bridge"></iframe>
+<iframe
+  id="bridgeFrame"
+  title="Mindspace AI Bridge"
+></iframe>
 
 <script>
 "use strict";
+
+/* =====================================================
+   01｜基本設定
+===================================================== */
 
 const GAS_URL =
   "https://script.google.com/macros/s/AKfycbwUooMD69_NMBhTzxf0Os_D6BEGb3QsGyhXpTGv09emRcG_4du219K4qO_FggY1vnLHOg/exec";
 
 const APP = "mindspace-v2";
+
 const $ = id => document.getElementById(id);
 
 let bridgeToken = "";
@@ -210,6 +812,7 @@ let currentPhoto = "";
 let processing = false;
 
 const editCanvas = $("editCanvas");
+
 const editCtx = editCanvas.getContext("2d", {
   willReadFrequently: true
 });
@@ -220,8 +823,10 @@ let brushSize = 30;
 let isDrawing = false;
 let lastPoint = null;
 let originalCutout = null;
+
 let editHistory = [];
 let editHistoryIndex = -1;
+
 const MAX_HISTORY = 12;
 
 let latestCreationId = null;
@@ -250,29 +855,41 @@ function closeModal(id) {
 function googleOrigin(origin) {
   try {
     const url = new URL(origin);
-    return url.protocol === "https:" &&
+
+    return (
+      url.protocol === "https:" &&
       (
         url.hostname === "script.google.com" ||
         url.hostname === "script.googleusercontent.com" ||
         url.hostname.endsWith(".googleusercontent.com")
-      );
+      )
+    );
   } catch {
     return false;
   }
 }
 
-/* 工作台 */
+/* =====================================================
+   02｜工作台
+===================================================== */
 
-$("bubbleWorkbench").onclick = () =>
+$("bubbleWorkbench").onclick = () => {
   $("sidebar").classList.add("open");
+  updateCommandSelection();
+};
 
-$("closeWorkbench").onclick = () =>
+$("closeWorkbench").onclick = () => {
   $("sidebar").classList.remove("open");
+};
 
-/* Bridge：沿用已成功的通訊協定 */
+/* =====================================================
+   03｜Bridge 通訊
+   保留原本已使用的通訊協定
+===================================================== */
 
 function connectBridge() {
   bridgeGeneration++;
+
   const generation = bridgeGeneration;
 
   bridgeReady = false;
@@ -284,41 +901,70 @@ function connectBridge() {
 
   for (const job of pending.values()) {
     clearTimeout(job.timer);
-    job.reject(new Error("Bridge 已重新連線"));
+
+    job.reject(
+      new Error("Bridge 已重新連線")
+    );
   }
+
   pending.clear();
 
   bridgeToken = crypto.randomUUID();
 
   const url = new URL(GAS_URL);
-  url.searchParams.set("bridgeToken", bridgeToken);
-  url.searchParams.set("parentOrigin", location.origin);
+
+  url.searchParams.set(
+    "bridgeToken",
+    bridgeToken
+  );
+
+  url.searchParams.set(
+    "parentOrigin",
+    location.origin
+  );
 
   const frame = $("bridgeFrame");
 
   setStatus("正在連接 Bridge……");
-  $("aiTestResult").textContent = "等待 Bridge 握手。";
+
+  $("aiTestResult").textContent =
+    "等待 Bridge 握手。";
 
   frame.src = url.toString();
 
   helloTimer = setInterval(() => {
-    if (generation !== bridgeGeneration || bridgeReady) {
+    if (
+      generation !== bridgeGeneration ||
+      bridgeReady
+    ) {
       clearInterval(helloTimer);
       return;
     }
 
     try {
-      frame.contentWindow.postMessage({
-        app: APP,
-        token: bridgeToken,
-        kind: "hello"
-      }, "https://script.google.com");
+      frame.contentWindow.postMessage(
+        {
+          app: APP,
+          token: bridgeToken,
+          kind: "hello"
+        },
+        "https://script.google.com"
+      );
     } catch {}
   }, 1000);
 
   bridgeTimer = setTimeout(() => {
-    if (generation !== bridgeGeneration || bridgeReady) return;
-    setStatus("Bridge 握手逾時", "error");
+    if (
+      generation !== bridgeGeneration ||
+      bridgeReady
+    ) {
+      return;
+    }
+
+    setStatus(
+      "Bridge 握手逾時",
+      "error"
+    );
   }, 15000);
 }
 
@@ -327,7 +973,13 @@ window.addEventListener("message", event => {
 
   const message = event.data;
 
-  if (!message || typeof message !== "object") return;
+  if (
+    !message ||
+    typeof message !== "object"
+  ) {
+    return;
+  }
+
   if (message.app !== APP) return;
   if (message.token !== bridgeToken) return;
 
@@ -342,8 +994,10 @@ window.addEventListener("message", event => {
     clearInterval(helloTimer);
 
     setStatus("Bridge 已建立通訊");
+
     $("aiTestResult").textContent =
       "可以測試 OpenAI 真實連線。";
+
     return;
   }
 
@@ -351,6 +1005,7 @@ window.addEventListener("message", event => {
   if (event.source !== bridgeWindow) return;
 
   const job = pending.get(message.id);
+
   if (!job) return;
 
   clearTimeout(job.timer);
@@ -360,12 +1015,18 @@ window.addEventListener("message", event => {
     job.resolve(message.result);
   } else {
     job.reject(
-      new Error(message.error || "後端請求失敗")
+      new Error(
+        message.error || "後端請求失敗"
+      )
     );
   }
 });
 
-function requestAI(type, data = {}, timeout = 90000) {
+function requestAI(
+  type,
+  data = {},
+  timeout = 90000
+) {
   if (!bridgeReady || !bridgeWindow) {
     return Promise.reject(
       new Error("Bridge 尚未連線")
@@ -377,20 +1038,30 @@ function requestAI(type, data = {}, timeout = 90000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
-      reject(new Error(type + " 請求逾時"));
+
+      reject(
+        new Error(type + " 請求逾時")
+      );
     }, timeout);
 
-    pending.set(id, {resolve, reject, timer});
+    pending.set(id, {
+      resolve,
+      reject,
+      timer
+    });
 
     try {
-      bridgeWindow.postMessage({
-        app: APP,
-        token: bridgeToken,
-        kind: "request",
-        id,
-        type,
-        data
-      }, bridgeOrigin);
+      bridgeWindow.postMessage(
+        {
+          app: APP,
+          token: bridgeToken,
+          kind: "request",
+          id,
+          type,
+          data
+        },
+        bridgeOrigin
+      );
     } catch (error) {
       clearTimeout(timer);
       pending.delete(id);
@@ -403,13 +1074,17 @@ $("reloadBridge").onclick = connectBridge;
 
 $("testBridge").onclick = async () => {
   const button = $("testBridge");
+
   button.disabled = true;
 
   try {
     setStatus("正在測試 OpenAI……");
 
     const ping = await requestAI("ping");
-    if (!ping.alive) throw new Error("後端 ping 失敗");
+
+    if (!ping.alive) {
+      throw new Error("後端 ping 失敗");
+    }
 
     const ai = await requestAI("checkAI");
 
@@ -417,7 +1092,10 @@ $("testBridge").onclick = async () => {
       throw new Error("OpenAI 驗證失敗");
     }
 
-    setStatus("OpenAI 真實連線成功", "success");
+    setStatus(
+      "OpenAI 真實連線成功",
+      "success"
+    );
 
     $("aiTestResult").textContent =
       "模型：" + ai.model + "\n" +
@@ -426,61 +1104,104 @@ $("testBridge").onclick = async () => {
       ai.text;
 
   } catch (error) {
-    setStatus("AI 連線失敗", "error");
-    $("aiTestResult").textContent = error.message;
+    setStatus(
+      "AI 連線失敗",
+      "error"
+    );
+
+    $("aiTestResult").textContent =
+      error.message;
+
   } finally {
     button.disabled = false;
   }
 };
 
-/* 圖片工具 */
+/* =====================================================
+   04｜圖片工具
+===================================================== */
 
-function loadImageElement(src, revoke = false) {
+function loadImageElement(
+  src,
+  revoke = false
+) {
   return new Promise((resolve, reject) => {
     const image = new Image();
 
     image.onload = () => {
-      if (revoke) URL.revokeObjectURL(src);
+      if (revoke) {
+        URL.revokeObjectURL(src);
+      }
+
       resolve(image);
     };
 
     image.onerror = () => {
-      if (revoke) URL.revokeObjectURL(src);
-      reject(new Error("圖片載入失敗"));
+      if (revoke) {
+        URL.revokeObjectURL(src);
+      }
+
+      reject(
+        new Error("圖片載入失敗")
+      );
     };
 
     image.src = src;
   });
 }
 
-function canvasToPhoto(source, width, height) {
+function canvasToPhoto(
+  source,
+  width,
+  height
+) {
   const limit = 900;
-  const scale = Math.min(1, limit / Math.max(width, height));
+
+  const scale = Math.min(
+    1,
+    limit / Math.max(width, height)
+  );
 
   const canvas = document.createElement("canvas");
+
   canvas.width = Math.round(width * scale);
   canvas.height = Math.round(height * scale);
 
   canvas.getContext("2d").drawImage(
-    source, 0, 0, canvas.width, canvas.height
+    source,
+    0,
+    0,
+    canvas.width,
+    canvas.height
   );
 
-  return canvas.toDataURL("image/jpeg", .83);
+  return canvas.toDataURL(
+    "image/jpeg",
+    .83
+  );
 }
 
-/* 攝影機 */
+/* =====================================================
+   05｜攝影機
+===================================================== */
 
 async function stopCamera() {
   if (cameraStream) {
-    cameraStream.getTracks().forEach(track => track.stop());
+    cameraStream
+      .getTracks()
+      .forEach(track => track.stop());
+
     cameraStream = null;
   }
+
   $("cameraVideo").srcObject = null;
 }
 
 async function startCamera() {
   openModal("cameraModal");
-  $("cameraMessage").textContent = "正在開啟攝影機……";
+
+  $("cameraMessage").textContent =
+    "正在開啟攝影機……";
 
   try {
     await stopCamera();
@@ -489,14 +1210,22 @@ async function startCamera() {
       await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
-          facingMode: {ideal: facingMode},
-          width: {ideal: 1280},
-          height: {ideal: 720}
+          facingMode: {
+            ideal: facingMode
+          },
+          width: {
+            ideal: 1280
+          },
+          height: {
+            ideal: 720
+          }
         }
       });
 
     const video = $("cameraVideo");
+
     video.srcObject = cameraStream;
+
     await video.play();
 
     $("cameraMessage").textContent =
@@ -513,7 +1242,10 @@ $("bubbleCamera").onclick = startCamera;
 
 $("switchCamera").onclick = async () => {
   facingMode =
-    facingMode === "environment" ? "user" : "environment";
+    facingMode === "environment"
+      ? "user"
+      : "environment";
+
   await startCamera();
 };
 
@@ -525,79 +1257,117 @@ $("closeCamera").onclick = async () => {
 $("captureButton").onclick = async () => {
   const video = $("cameraVideo");
 
-  if (!video.videoWidth || !video.videoHeight) {
-    $("cameraMessage").textContent = "攝影機尚未準備完成。";
+  if (
+    !video.videoWidth ||
+    !video.videoHeight
+  ) {
+    $("cameraMessage").textContent =
+      "攝影機尚未準備完成。";
+
     return;
   }
 
   currentPhoto = canvasToPhoto(
-    video, video.videoWidth, video.videoHeight
+    video,
+    video.videoWidth,
+    video.videoHeight
   );
 
   await stopCamera();
+
   closeModal("cameraModal");
+
   await showEditor();
 };
 
-$("uploadPhoto").onclick = () => $("photoFile").click();
+$("uploadPhoto").onclick = () => {
+  $("photoFile").click();
+};
 
 $("photoFile").onchange = async event => {
   const file = event.target.files?.[0];
+
   if (!file) return;
 
   try {
     const image = await loadImageElement(
-      URL.createObjectURL(file), true
+      URL.createObjectURL(file),
+      true
     );
 
     currentPhoto = canvasToPhoto(
-      image, image.naturalWidth, image.naturalHeight
+      image,
+      image.naturalWidth,
+      image.naturalHeight
     );
 
     await showEditor();
 
   } catch (error) {
-    alert("照片讀取失敗：" + error.message);
+    alert(
+      "照片讀取失敗：" + error.message
+    );
   }
 
   event.target.value = "";
 };
 
-/* 去背編輯器 */
+/* =====================================================
+   06｜AI 去背編輯器
+===================================================== */
 
 async function showEditor() {
   editReady = false;
   originalCutout = null;
+
   editHistory = [];
   editHistoryIndex = -1;
 
   $("editTools").classList.add("hidden");
   $("removeBgAI").classList.remove("hidden");
-  $("editorMessage").textContent = "請先執行 AI 去背。";
 
-  const image = await loadImageElement(currentPhoto);
+  $("editorMessage").textContent =
+    "請先執行 AI 去背。";
+
+  const image =
+    await loadImageElement(currentPhoto);
 
   editCanvas.width = image.naturalWidth;
   editCanvas.height = image.naturalHeight;
 
   editCtx.clearRect(
-    0, 0, editCanvas.width, editCanvas.height
+    0,
+    0,
+    editCanvas.width,
+    editCanvas.height
   );
 
   editCtx.drawImage(
-    image, 0, 0, editCanvas.width, editCanvas.height
+    image,
+    0,
+    0,
+    editCanvas.width,
+    editCanvas.height
   );
 
   openModal("editorModal");
 }
 
 $("removeBgAI").onclick = async () => {
-  if (processing || !currentPhoto) return;
+  if (
+    processing ||
+    !currentPhoto
+  ) {
+    return;
+  }
 
   processing = true;
+
   const button = $("removeBgAI");
+
   button.disabled = true;
-  button.textContent = "AI 去背處理中……";
+  button.textContent =
+    "AI 去背處理中……";
 
   $("editorMessage").textContent =
     "正在進行 AI 去背，請稍候……";
@@ -605,38 +1375,55 @@ $("removeBgAI").onclick = async () => {
   try {
     const response = await requestAI(
       "removeBackgroundAI",
-      {image: currentPhoto},
+      {
+        image: currentPhoto
+      },
       180000
     );
 
     if (
       !response?.success ||
       typeof response.image !== "string" ||
-      !response.image.startsWith("data:image/png;base64,")
+      !response.image.startsWith(
+        "data:image/png;base64,"
+      )
     ) {
-      throw new Error("後端未回傳有效的去背 PNG");
+      throw new Error(
+        "後端未回傳有效的去背 PNG"
+      );
     }
 
-    const image = await loadImageElement(response.image);
+    const image =
+      await loadImageElement(response.image);
+
     originalCutout = image;
 
     editCanvas.width = image.naturalWidth;
     editCanvas.height = image.naturalHeight;
 
     editCtx.clearRect(
-      0, 0, editCanvas.width, editCanvas.height
+      0,
+      0,
+      editCanvas.width,
+      editCanvas.height
     );
 
     editCtx.drawImage(
-      image, 0, 0, editCanvas.width, editCanvas.height
+      image,
+      0,
+      0,
+      editCanvas.width,
+      editCanvas.height
     );
 
     editReady = true;
     editMode = "erase";
+
     setActiveTool();
 
     editHistory = [];
     editHistoryIndex = -1;
+
     saveHistory();
 
     $("editTools").classList.remove("hidden");
@@ -648,22 +1435,28 @@ $("removeBgAI").onclick = async () => {
   } catch (error) {
     $("editorMessage").textContent =
       "去背未完成：" + error.message;
+
   } finally {
     processing = false;
     button.disabled = false;
-    button.textContent = "開始 AI 去背";
+    button.textContent =
+      "開始 AI 去背";
   }
 };
 
-/* 橡皮擦、恢復、復原 */
+/* =====================================================
+   07｜手動橡皮擦、恢復、復原
+===================================================== */
 
 function setActiveTool() {
   $("eraserTool").classList.toggle(
-    "active", editMode === "erase"
+    "active",
+    editMode === "erase"
   );
 
   $("restoreTool").classList.toggle(
-    "active", editMode === "restore"
+    "active",
+    editMode === "restore"
   );
 }
 
@@ -679,16 +1472,22 @@ $("restoreTool").onclick = () => {
 
 $("brushSize").oninput = event => {
   brushSize = Number(event.target.value);
-  $("brushSizeValue").textContent = brushSize;
+
+  $("brushSizeValue").textContent =
+    brushSize;
 };
 
 function pointerPosition(event) {
-  const rect = editCanvas.getBoundingClientRect();
+  const rect =
+    editCanvas.getBoundingClientRect();
 
   return {
-    x: (event.clientX - rect.left) *
+    x:
+      (event.clientX - rect.left) *
       editCanvas.width / rect.width,
-    y: (event.clientY - rect.top) *
+
+    y:
+      (event.clientY - rect.top) *
       editCanvas.height / rect.height
   };
 }
@@ -698,21 +1497,42 @@ function paintCircle(x, y) {
 
   if (editMode === "erase") {
     editCtx.save();
-    editCtx.globalCompositeOperation = "destination-out";
+
+    editCtx.globalCompositeOperation =
+      "destination-out";
+
     editCtx.beginPath();
-    editCtx.arc(x, y, radius, 0, Math.PI * 2);
+
+    editCtx.arc(
+      x,
+      y,
+      radius,
+      0,
+      Math.PI * 2
+    );
+
     editCtx.fill();
     editCtx.restore();
 
   } else if (originalCutout) {
     editCtx.save();
+
     editCtx.beginPath();
-    editCtx.arc(x, y, radius, 0, Math.PI * 2);
+
+    editCtx.arc(
+      x,
+      y,
+      radius,
+      0,
+      Math.PI * 2
+    );
+
     editCtx.clip();
 
     editCtx.drawImage(
       originalCutout,
-      0, 0,
+      0,
+      0,
       editCanvas.width,
       editCanvas.height
     );
@@ -723,15 +1543,23 @@ function paintCircle(x, y) {
 
 function paintLine(from, to) {
   const distance = Math.hypot(
-    to.x - from.x, to.y - from.y
+    to.x - from.x,
+    to.y - from.y
   );
 
   const steps = Math.max(
     1,
-    Math.ceil(distance / Math.max(1, brushSize / 5))
+    Math.ceil(
+      distance /
+      Math.max(1, brushSize / 5)
+    )
   );
 
-  for (let i = 0; i <= steps; i++) {
+  for (
+    let i = 0;
+    i <= steps;
+    i++
+  ) {
     const t = i / steps;
 
     paintCircle(
@@ -741,114 +1569,187 @@ function paintLine(from, to) {
   }
 }
 
-editCanvas.addEventListener("pointerdown", event => {
-  if (!editReady) return;
+editCanvas.addEventListener(
+  "pointerdown",
+  event => {
+    if (!editReady) return;
 
-  event.preventDefault();
-  isDrawing = true;
+    event.preventDefault();
 
-  editCanvas.setPointerCapture(event.pointerId);
-  lastPoint = pointerPosition(event);
+    isDrawing = true;
 
-  paintCircle(lastPoint.x, lastPoint.y);
-});
+    editCanvas.setPointerCapture(
+      event.pointerId
+    );
 
-editCanvas.addEventListener("pointermove", event => {
-  if (!isDrawing || !editReady) return;
+    lastPoint =
+      pointerPosition(event);
 
-  event.preventDefault();
+    paintCircle(
+      lastPoint.x,
+      lastPoint.y
+    );
+  }
+);
 
-  const point = pointerPosition(event);
-  paintLine(lastPoint, point);
-  lastPoint = point;
-});
+editCanvas.addEventListener(
+  "pointermove",
+  event => {
+    if (
+      !isDrawing ||
+      !editReady
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const point =
+      pointerPosition(event);
+
+    paintLine(
+      lastPoint,
+      point
+    );
+
+    lastPoint = point;
+  }
+);
 
 function finishDrawing() {
   if (!isDrawing) return;
 
   isDrawing = false;
   lastPoint = null;
+
   saveHistory();
 }
 
-editCanvas.addEventListener("pointerup", finishDrawing);
-editCanvas.addEventListener("pointercancel", finishDrawing);
-editCanvas.addEventListener("lostpointercapture", finishDrawing);
+editCanvas.addEventListener(
+  "pointerup",
+  finishDrawing
+);
+
+editCanvas.addEventListener(
+  "pointercancel",
+  finishDrawing
+);
+
+editCanvas.addEventListener(
+  "lostpointercapture",
+  finishDrawing
+);
 
 function saveHistory() {
   if (!editReady) return;
 
   editHistory = editHistory.slice(
-    0, editHistoryIndex + 1
+    0,
+    editHistoryIndex + 1
   );
 
   editHistory.push(
     editCtx.getImageData(
-      0, 0, editCanvas.width, editCanvas.height
+      0,
+      0,
+      editCanvas.width,
+      editCanvas.height
     )
   );
 
-  if (editHistory.length > MAX_HISTORY) {
+  if (
+    editHistory.length > MAX_HISTORY
+  ) {
     editHistory.shift();
   }
 
-  editHistoryIndex = editHistory.length - 1;
+  editHistoryIndex =
+    editHistory.length - 1;
 }
 
 function restoreHistory() {
   if (
     editHistoryIndex < 0 ||
     !editHistory[editHistoryIndex]
-  ) return;
+  ) {
+    return;
+  }
 
   editCtx.putImageData(
-    editHistory[editHistoryIndex], 0, 0
+    editHistory[editHistoryIndex],
+    0,
+    0
   );
 }
 
 $("undoEdit").onclick = () => {
   if (editHistoryIndex <= 0) return;
+
   editHistoryIndex--;
   restoreHistory();
 };
 
 $("redoEdit").onclick = () => {
-  if (editHistoryIndex >= editHistory.length - 1) return;
+  if (
+    editHistoryIndex >=
+    editHistory.length - 1
+  ) {
+    return;
+  }
+
   editHistoryIndex++;
   restoreHistory();
 };
 
 $("resetEdit").onclick = () => {
-  if (!editReady || !originalCutout) return;
+  if (
+    !editReady ||
+    !originalCutout
+  ) {
+    return;
+  }
 
   editCtx.clearRect(
-    0, 0, editCanvas.width, editCanvas.height
+    0,
+    0,
+    editCanvas.width,
+    editCanvas.height
   );
 
   editCtx.drawImage(
     originalCutout,
-    0, 0, editCanvas.width, editCanvas.height
+    0,
+    0,
+    editCanvas.width,
+    editCanvas.height
   );
 
   saveHistory();
 };
 
-/* 作品立即進入世界 */
+/* =====================================================
+   08｜原始積木立即進入世界
+===================================================== */
 
 $("saveEditor").onclick = async () => {
   if (!editReady) return;
 
   const button = $("saveEditor");
+
   button.disabled = true;
 
   try {
     if (
-      typeof window.addMindspaceCreation !== "function"
+      typeof window.addMindspaceCreation !==
+      "function"
     ) {
-      throw new Error("sketch.js 尚未載入");
+      throw new Error(
+        "sketch.js 尚未載入"
+      );
     }
 
-    const png = editCanvas.toDataURL("image/png");
+    const png =
+      editCanvas.toDataURL("image/png");
 
     latestCreationId =
       await window.addMindspaceCreation(png);
@@ -856,34 +1757,48 @@ $("saveEditor").onclick = async () => {
     latestCreationImage = png;
 
     closeModal("editorModal");
+
     $("sidebar").classList.remove("open");
 
     currentPhoto = "";
 
-    // 積木已經先進入世界。
-    // 不需要等待 AI 辨識。
-    say("你的積木已經進入 Mindspace！");
+    say(
+      "你的積木已經進入 Mindspace！"
+    );
 
     selectedType = "";
     aiSuggestion = null;
 
-    $("classifyCharacter").classList.remove("selected");
-    $("classifyEnvironment").classList.remove("selected");
+    $("classifyCharacter").classList.remove(
+      "selected"
+    );
+
+    $("classifyEnvironment").classList.remove(
+      "selected"
+    );
 
     $("classificationPreview").src = png;
+
     $("classificationDescription").value = "";
+
     $("aiSuggestion").textContent =
       "你可以描述作品，再讓 AI 提出建議。";
 
     $("classificationMessage").textContent =
       "AI 的判斷可以更正，最後由你決定。";
 
-    setVoiceStatus("按麥克風說出你的想像，或直接輸入文字。");
+    setVoiceStatus(
+      "按麥克風說出你的想像，或直接輸入文字。"
+    );
+
     openModal("classificationModal");
+
+    updateCommandSelection();
 
   } catch (error) {
     $("editorMessage").textContent =
       "加入世界失敗：" + error.message;
+
   } finally {
     button.disabled = false;
   }
@@ -891,20 +1806,25 @@ $("saveEditor").onclick = async () => {
 
 $("closeEditor").onclick = () => {
   if (processing) return;
+
   closeModal("editorModal");
 };
 
-/* 真正的 AI 角色／環境辨識 */
+/* =====================================================
+   09｜AI 角色／環境分類
+===================================================== */
 
 function selectCreationType(type) {
   selectedType = type;
 
   $("classifyCharacter").classList.toggle(
-    "selected", type === "character"
+    "selected",
+    type === "character"
   );
 
   $("classifyEnvironment").classList.toggle(
-    "selected", type === "environment"
+    "selected",
+    type === "environment"
   );
 
   $("classificationMessage").textContent =
@@ -913,33 +1833,43 @@ function selectCreationType(type) {
       : "目前選擇：Environment 環境";
 }
 
-$("classifyCharacter").onclick = () =>
+$("classifyCharacter").onclick = () => {
   selectCreationType("character");
+};
 
-$("classifyEnvironment").onclick = () =>
+$("classifyEnvironment").onclick = () => {
   selectCreationType("environment");
+};
 
 $("analyzeCreationAI").onclick = async () => {
-  if (analyzing || !latestCreationImage) return;
+  if (
+    analyzing ||
+    !latestCreationImage
+  ) {
+    return;
+  }
 
   analyzing = true;
 
   const button = $("analyzeCreationAI");
+
   button.disabled = true;
-  button.textContent = "OpenAI 正在理解作品……";
+  button.textContent =
+    "OpenAI 正在理解作品……";
 
   $("aiSuggestion").textContent =
     "正在分析積木外型與孩子的描述……";
 
   try {
     const description =
-      $("classificationDescription").value.trim();
+      $("classificationDescription")
+        .value.trim();
 
     const result = await requestAI(
       "classifyCreationAI",
       {
         image: latestCreationImage,
-        description: description
+        description
       },
       120000
     );
@@ -949,24 +1879,32 @@ $("analyzeCreationAI").onclick = async () => {
       !result.suggestion ||
       !result.responseId
     ) {
-      throw new Error("OpenAI 未回傳有效辨識資料");
+      throw new Error(
+        "OpenAI 未回傳有效辨識資料"
+      );
     }
 
     aiSuggestion = result.suggestion;
 
-    // 如果孩子尚未自行選擇，才套用 AI 建議。
     if (!selectedType) {
-      selectCreationType(aiSuggestion.kind);
+      selectCreationType(
+        aiSuggestion.kind
+      );
     }
 
     $("aiSuggestion").textContent =
       "AI 建議：" +
-      (aiSuggestion.kind === "character"
-        ? "Character 角色"
-        : "Environment 環境") +
-      "\n名稱：" + aiSuggestion.name +
-      "\n原因：" + aiSuggestion.reason +
-      "\n\nOpenAI 請求 ID：" + result.responseId;
+      (
+        aiSuggestion.kind === "character"
+          ? "Character 角色"
+          : "Environment 環境"
+      ) +
+      "\n名稱：" +
+      aiSuggestion.name +
+      "\n原因：" +
+      aiSuggestion.reason +
+      "\n\nOpenAI 請求 ID：" +
+      result.responseId;
 
     $("classificationMessage").textContent =
       "可以接受 AI 的建議，或點擊另一個類型更正。";
@@ -983,11 +1921,15 @@ $("analyzeCreationAI").onclick = async () => {
   } finally {
     analyzing = false;
     button.disabled = false;
-    button.textContent = "✨ 讓 AI 理解我的作品";
+
+    button.textContent =
+      "✨ 讓 AI 理解我的作品";
   }
 };
 
-/* 確認並讓 p5.js 套用 */
+/* =====================================================
+   10｜確認 AI 分類
+===================================================== */
 
 $("confirmClassification").onclick = () => {
   if (analyzing) return;
@@ -995,30 +1937,36 @@ $("confirmClassification").onclick = () => {
   if (!selectedType) {
     $("classificationMessage").textContent =
       "請先選擇角色或環境。";
+
     return;
   }
 
   const description =
-    $("classificationDescription").value.trim();
+    $("classificationDescription")
+      .value.trim();
 
   if (
-    typeof window.applyMindspaceClassification !== "function"
+    typeof window.applyMindspaceClassification !==
+    "function"
   ) {
     $("classificationMessage").textContent =
       "sketch.js 尚未支援角色／環境分類。";
+
     return;
   }
 
-  const success = window.applyMindspaceClassification(
-    latestCreationId,
-    selectedType,
-    description,
-    aiSuggestion
-  );
+  const success =
+    window.applyMindspaceClassification(
+      latestCreationId,
+      selectedType,
+      description,
+      aiSuggestion
+    );
 
   if (!success) {
     $("classificationMessage").textContent =
       "找不到對應的積木作品。";
+
     return;
   }
 
@@ -1030,50 +1978,95 @@ $("confirmClassification").onclick = () => {
       ? "你的角色開始探索世界了！"
       : "你的環境已經延伸到 Mindspace！"
   );
+
+  updateCommandSelection();
 };
 
 $("skipClassification").onclick = () => {
   if (analyzing) return;
 
   stopCreationVoice(true);
+
   closeModal("classificationModal");
-  say("作品已經留在世界中，可以繼續創造！");
+
+  say(
+    "作品已經留在世界中，可以繼續創造！"
+  );
 };
 
-/* 作品數量 */
+/* =====================================================
+   11｜世界數量
+===================================================== */
 
 window.updateMindspaceCount = count => {
   $("heroList").textContent =
     count === 0
       ? "目前還沒有作品。"
-      : "目前世界中有 " + count + " 個積木作品。";
+      : "目前世界中有 " +
+        count +
+        " 個積木作品。";
 };
 
 $("clearWorld").onclick = () => {
-  if (!confirm("確定要清空所有作品嗎？")) return;
+  if (
+    !confirm(
+      "確定要清空所有作品嗎？"
+    )
+  ) {
+    return;
+  }
+
   window.clearMindspaceWorld?.();
+
+  updateCommandSelection();
+
+  setCommandStatus(
+    "世界已清空，可以開始新的創作。"
+  );
 };
 
-/* 語音描述：瀏覽器語音轉文字 → 現有 OpenAI Bridge */
-const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+/* =====================================================
+   12｜語音辨識共用設定
+===================================================== */
+
+const SpeechRecognitionClass =
+  window.SpeechRecognition ||
+  window.webkitSpeechRecognition;
+
 let creationRecognition = null;
 let creationListening = false;
 let voiceCancelled = false;
 let voiceError = false;
 
 function setVoiceStatus(message) {
-  $("classificationVoiceStatus").textContent = message;
+  $("classificationVoiceStatus").textContent =
+    message;
 }
-function updateMicButton() {
+
+function updateCreationMicButton() {
   const button = $("classificationMic");
-  button.textContent = creationListening
-    ? "⏹️ 結束說話，交給 AI 理解"
-    : "🎙️ 按這裡，說出你的想像";
-  button.setAttribute("aria-pressed", String(creationListening));
-  button.style.background = creationListening ? "#FFE0D8" : "#E5F1FC";
+
+  button.textContent =
+    creationListening
+      ? "⏹️ 結束說話，交給 AI 理解"
+      : "🎙️ 按這裡，說出你的想像";
+
+  button.setAttribute(
+    "aria-pressed",
+    String(creationListening)
+  );
+
+  button.style.background =
+    creationListening
+      ? "#FFE0D8"
+      : "#E5F1FC";
 }
-function stopCreationVoice(cancel = false) {
+
+function stopCreationVoice(
+  cancel = false
+) {
   if (!creationRecognition) return;
+
   if (cancel) {
     voiceCancelled = true;
     creationRecognition.abort();
@@ -1081,692 +2074,739 @@ function stopCreationVoice(cancel = false) {
     creationRecognition.stop();
   }
 }
+
 function startCreationVoice() {
   if (creationListening) {
     stopCreationVoice();
     return;
   }
+
   if (!SpeechRecognitionClass) {
-    setVoiceStatus("瀏覽器不支援語音辨識，請使用 Chrome 或 Edge，或直接輸入文字。");
+    setVoiceStatus(
+      "瀏覽器不支援語音辨識，請使用 Chrome 或 Edge，或直接輸入文字。"
+    );
+
     return;
   }
-  if (!latestCreationId || !latestCreationImage || analyzing) {
-    setVoiceStatus("請先拍照完成去背，並等待目前的辨識結束。");
+
+  if (
+    !latestCreationId ||
+    !latestCreationImage ||
+    analyzing
+  ) {
+    setVoiceStatus(
+      "請先拍照完成去背，並等待目前的辨識結束。"
+    );
+
     return;
   }
-  const recognition = new SpeechRecognitionClass();
+
+  const recognition =
+    new SpeechRecognitionClass();
+
   creationRecognition = recognition;
+
   voiceCancelled = false;
   voiceError = false;
-  const previous = $("classificationDescription").value.trim();
+
+  const previous =
+    $("classificationDescription")
+      .value.trim();
+
   let transcript = "";
+
   recognition.lang = "zh-TW";
   recognition.continuous = false;
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
+
   recognition.onstart = () => {
     creationListening = true;
-    updateMicButton();
-    setVoiceStatus("🎙️ 正在聆聽……說出作品是什麼、會做什麼、住在哪裡。");
-    say("我正在聽你的想像！");
+
+    updateCreationMicButton();
+
+    setVoiceStatus(
+      "🎙️ 正在聆聽……說出作品是什麼、會做什麼、住在哪裡。"
+    );
+
+    say(
+      "我正在聽你的想像！"
+    );
   };
+
   recognition.onresult = event => {
     let finalText = "";
     let interimText = "";
-    for (let i = 0; i < event.results.length; i++) {
-      const text = event.results[i][0]?.transcript || "";
-      if (event.results[i].isFinal) finalText += text;
-      else interimText += text;
+
+    for (
+      let i = 0;
+      i < event.results.length;
+      i++
+    ) {
+      const text =
+        event.results[i][0]?.transcript || "";
+
+      if (event.results[i].isFinal) {
+        finalText += text;
+      } else {
+        interimText += text;
+      }
     }
-    transcript = (finalText + interimText).trim();
-    $("classificationDescription").value = [previous, transcript].filter(Boolean).join("\n");
-    setVoiceStatus("辨識內容：" + transcript);
+
+    transcript =
+      (finalText + interimText).trim();
+
+    $("classificationDescription").value =
+      [previous, transcript]
+        .filter(Boolean)
+        .join("\n");
+
+    setVoiceStatus(
+      "辨識內容：" + transcript
+    );
   };
+
   recognition.onerror = event => {
     voiceError = true;
+
     const errors = {
-      "not-allowed": "麥克風權限被拒絕，請允許瀏覽器使用麥克風。",
-      "service-not-allowed": "瀏覽器未允許語音辨識服務。",
-      "no-speech": "沒有聽到聲音，請再試一次。",
-      "audio-capture": "找不到可用的麥克風。",
-      "network": "語音辨識服務無法連線，請檢查網路。"
+      "not-allowed":
+        "麥克風權限被拒絕，請允許瀏覽器使用麥克風。",
+      "service-not-allowed":
+        "瀏覽器未允許語音辨識服務。",
+      "no-speech":
+        "沒有聽到聲音，請再試一次。",
+      "audio-capture":
+        "找不到可用的麥克風。",
+      "network":
+        "語音辨識服務無法連線，請檢查網路。"
     };
-    setVoiceStatus(errors[event.error] || "語音辨識失敗：" + event.error);
+
+    setVoiceStatus(
+      errors[event.error] ||
+      "語音辨識失敗：" + event.error
+    );
   };
+
   recognition.onend = () => {
     creationListening = false;
     creationRecognition = null;
-    updateMicButton();
-    if (voiceCancelled || voiceError) return;
-    if (!transcript.trim()) {
-      setVoiceStatus("沒有取得語音內容，請再試一次。");
+
+    updateCreationMicButton();
+
+    if (
+      voiceCancelled ||
+      voiceError
+    ) {
       return;
     }
-    setVoiceStatus("語音完成，正在交給 OpenAI 理解作品……");
+
+    if (!transcript.trim()) {
+      setVoiceStatus(
+        "沒有取得語音內容，請再試一次。"
+      );
+
+      return;
+    }
+
+    setVoiceStatus(
+      "語音完成，正在交給 OpenAI 理解作品……"
+    );
+
     $("analyzeCreationAI").click();
   };
+
   try {
     recognition.start();
   } catch (error) {
     creationListening = false;
     creationRecognition = null;
-    updateMicButton();
-    setVoiceStatus("無法啟動語音辨識：" + error.message);
+
+    updateCreationMicButton();
+
+    setVoiceStatus(
+      "無法啟動語音辨識：" +
+      error.message
+    );
   }
 }
-$("classificationMic").onclick = startCreationVoice;
-$("bubbleMic").onclick = () => {
-  if (!$("classificationModal").classList.contains("hidden")) {
-    startCreationVoice();
-  } else {
-    say("請先拍照建立作品，再使用分類視窗的語音描述。");
-  }
-};
-$("micButton").onclick = () => {
-  say("語音變身與故事修改將在下一階段加入；目前可用語音描述新作品。");
-};
 
-connectBridge();
-</script>
+$("classificationMic").onclick =
+  startCreationVoice;
 
+/* =====================================================
+   13｜角色選取資訊
+===================================================== */
 
-<script src="./sketch.js"></script>
-
-<!-- ======================================================
-     Mindspace Plus-Plus
-     STEP 06｜文字＋語音 AI 自由創造
-     使用現有 requestAI 與 Google Apps Script Bridge
-====================================================== -->
-<script>
-(function () {
-  "use strict";
-
-  const $command = id => document.getElementById(id);
-
-  let commandBusy = false;
-  let commandListening = false;
-  let commandRecognition = null;
-  let commandTranscript = "";
-  let commandVoiceError = false;
-
-  const Recognition =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
-
-  /* ---------------------------------------
-     01｜建立指令介面
-  --------------------------------------- */
-
-  const chatInput = $command("chatInput");
-  const micButton = $command("micButton");
-  const bubbleMic = $command("bubbleMic");
-
-  const commandSend = document.createElement("button");
-  commandSend.id = "mindspaceCommandSend";
-  commandSend.className = "action primary";
-  commandSend.textContent = "✨ 讓我的想像成真";
-
-  const commandStatus = document.createElement("div");
-  commandStatus.id = "mindspaceCommandStatus";
-  commandStatus.setAttribute("aria-live", "polite");
-  commandStatus.style.cssText = [
-    "margin-top:10px",
-    "padding:12px",
-    "border-radius:12px",
-    "background:#f1f5f9",
-    "color:#34465e",
-    "font-size:13px",
-    "line-height:1.7",
-    "white-space:pre-wrap",
-    "overflow-wrap:anywhere"
-  ].join(";");
-
-  const commandSelection = document.createElement("div");
-  commandSelection.id = "mindspaceCommandSelection";
-  commandSelection.style.cssText = [
-    "margin-bottom:10px",
-    "font-size:13px",
-    "color:#596c83"
-  ].join(";");
-
-  chatInput.parentNode.insertBefore(
-    commandSelection,
-    chatInput
-  );
-
-  micButton.parentNode.insertBefore(
-    commandSend,
-    micButton.nextSibling
-  );
-
-  commandSend.parentNode.insertBefore(
-    commandStatus,
-    commandSend.nextSibling
-  );
-
-  micButton.textContent = "🎙️ 說出我的想像";
-
-  commandStatus.textContent =
-    "先點選世界中的角色，再輸入文字或使用語音。";
-
-  /* ---------------------------------------
-     02｜角色選取
-  --------------------------------------- */
-
-  function getSelectedItem() {
-    if (
-      typeof window.getSelectedMindspaceCreation ===
-      "function"
-    ) {
-      return window.getSelectedMindspaceCreation();
-    }
-
-    const id = window.mindspaceSelectedId;
-
-    return (
-      window.mindspaceCreations || []
-    ).find(item => item.id === id) || null;
+function getSelectedMindspaceItem() {
+  if (
+    typeof window.getSelectedMindspaceCreation ===
+    "function"
+  ) {
+    return window.getSelectedMindspaceCreation();
   }
 
-  function getSelectedId() {
-    return getSelectedItem()?.id || null;
+  const id =
+    window.mindspaceSelectedId;
+
+  return (
+    window.mindspaceCreations || []
+  ).find(item => item.id === id) || null;
+}
+
+function updateCommandSelection() {
+  const item =
+    getSelectedMindspaceItem();
+
+  const element =
+    $("mindspaceCommandSelection");
+
+  if (!item) {
+    element.textContent =
+      "🎯 請先選取世界中的角色";
+
+    return;
   }
 
-  function updateSelectionLabel() {
-    const item = getSelectedItem();
+  const name =
+    item.name ||
+    item.identity ||
+    item.description ||
+    "我的積木作品";
 
-    if (!item) {
-      commandSelection.textContent =
-        "尚未選取角色，請先點選畫面中的積木。";
-      return;
-    }
+  element.textContent =
+    "🎯 目前選取：" + name;
+}
 
-    const name =
-      item.name ||
-      item.identity ||
-      item.description ||
-      "我的積木作品";
+window.addEventListener(
+  "mindspace:selection",
+  updateCommandSelection
+);
 
-    commandSelection.textContent =
-      "🎯 目前選取：" + name;
-  }
+/* =====================================================
+   14｜AI 指令狀態
+===================================================== */
 
-  window.addEventListener(
-    "mindspace:selection",
-    updateSelectionLabel
-  );
+let mindspaceCommandBusy = false;
 
-  updateSelectionLabel();
+function setCommandStatus(
+  message,
+  kind = ""
+) {
+  const element =
+    $("mindspaceCommandStatus");
 
-  /* ---------------------------------------
-     03｜黃色選取圓圈控制
-  --------------------------------------- */
+  element.textContent = message;
+  element.className = kind;
+}
 
-  function beginCommand() {
-    if (
-      typeof window.startMindspaceCommand ===
-      "function"
-    ) {
-      window.startMindspaceCommand();
-    }
-  }
+function setCommandBusy(value) {
+  mindspaceCommandBusy = value;
 
-  function endCommand() {
-    if (
-      typeof window.finishMindspaceCommand ===
-      "function"
-    ) {
-      window.finishMindspaceCommand();
-    }
-  }
+  $("mindspaceCommandSend").disabled = value;
+  $("micButton").disabled = value;
 
-  /* ---------------------------------------
-     04｜取得世界資訊
-  --------------------------------------- */
-
-  function getWorldContext() {
-    if (
-      typeof window.getMindspaceWorldState ===
-      "function"
-    ) {
-      return window.getMindspaceWorldState();
-    }
-
-    const creations = (
-      window.mindspaceCreations || []
-    ).map(item => ({
-      id: item.id,
-      kind: item.kind,
-      name: item.name || "",
-      identity: item.identity || "",
-      description: item.description || "",
-      movement: item.movement || "float",
-      abilities: item.abilities || [],
-      worldType: item.worldType || ""
-    }));
-
-    const worlds = (
-      window.mindspaceWorldZones || []
-    ).map(zone => ({
-      id: zone.id,
-      type: zone.type,
-      elements: zone.elements || []
-    }));
-
-    return { creations, worlds };
-  }
-
-  /* ---------------------------------------
-     05｜更新操作狀態
-  --------------------------------------- */
-
-  function setCommandStatus(message, error = false) {
-    commandStatus.textContent = message;
-
-    commandStatus.style.background =
-      error ? "#fff0ec" : "#f1f5f9";
-
-    commandStatus.style.color =
-      error ? "#a2382c" : "#34465e";
-  }
-
-  function setBusy(value) {
-    commandBusy = value;
-
-    commandSend.disabled = value;
-    micButton.disabled = value;
-
-    commandSend.textContent = value
+  $("mindspaceCommandSend").textContent =
+    value
       ? "✨ OpenAI 正在理解與創造……"
       : "✨ 讓我的想像成真";
+}
+
+function beginMindspaceCommand() {
+  window.startMindspaceCommand?.();
+}
+
+function finishMindspaceCommand() {
+  window.finishMindspaceCommand?.();
+}
+
+/* =====================================================
+   15｜取得世界資訊
+===================================================== */
+
+function getMindspaceContext() {
+  if (
+    typeof window.getMindspaceWorldState ===
+    "function"
+  ) {
+    return window.getMindspaceWorldState();
   }
 
-  /* ---------------------------------------
-     06｜真正呼叫 OpenAI
-  --------------------------------------- */
+  const creations = (
+    window.mindspaceCreations || []
+  ).map(item => ({
+    id: item.id,
+    kind: item.kind,
+    name: item.name || "",
+    identity: item.identity || "",
+    description: item.description || "",
+    movement: item.movement || "float",
+    abilities: item.abilities || [],
+    worldType: item.worldType || ""
+  }));
 
-  async function submitMindspaceCommand(text) {
-    const instruction = String(text || "").trim();
+  const worlds = (
+    window.mindspaceWorldZones || []
+  ).map(zone => ({
+    id: zone.id,
+    type: zone.type,
+    elements: zone.elements || []
+  }));
 
-    if (commandBusy) return;
+  return {
+    creations,
+    worlds
+  };
+}
 
-    if (!instruction) {
-      setCommandStatus(
-        "請先輸入想像內容，或點選麥克風說話。",
-        true
-      );
-      return;
-    }
+/* =====================================================
+   16｜真實 OpenAI 指令
+===================================================== */
 
-    const context = getWorldContext();
-    const targetId = getSelectedId();
+async function submitMindspaceCommand(
+  inputText
+) {
+  if (mindspaceCommandBusy) return;
 
-    if (!context.creations?.length) {
-      setCommandStatus(
-        "世界裡還沒有積木作品，請先拍照創造。",
-        true
-      );
-      return;
-    }
+  const text =
+    String(inputText || "").trim();
 
-    beginCommand();
-    setBusy(true);
-
+  if (!text) {
     setCommandStatus(
-      "正在把你的想像傳給 OpenAI……"
+      "請先輸入想像內容，或使用麥克風說話。",
+      "error"
     );
 
-    try {
-      if (typeof requestAI !== "function") {
-        throw new Error(
-          "找不到 OpenAI Bridge 請求功能"
-        );
-      }
+    return;
+  }
 
-      const result = await requestAI(
-        "interpretVoiceCommandAI",
-        {
-          text: instruction,
-          targetId,
-          context
-        },
-        120000
+  if (!bridgeReady) {
+    setCommandStatus(
+      "OpenAI Bridge 尚未連線，請稍候或重新連接。",
+      "error"
+    );
+
+    return;
+  }
+
+  const context =
+    getMindspaceContext();
+
+  if (
+    !Array.isArray(context.creations) ||
+    context.creations.length === 0
+  ) {
+    setCommandStatus(
+      "世界裡還沒有積木作品，請先拍照創造。",
+      "error"
+    );
+
+    return;
+  }
+
+  const selected =
+    getSelectedMindspaceItem();
+
+  const targetId =
+    selected?.id || null;
+
+  setCommandBusy(true);
+  beginMindspaceCommand();
+
+  setCommandStatus(
+    "正在把你的想像傳給 OpenAI……"
+  );
+
+  say(
+    "我正在理解你的想像！"
+  );
+
+  try {
+    const result = await requestAI(
+      "interpretVoiceCommandAI",
+      {
+        text,
+        targetId,
+        context
+      },
+      120000
+    );
+
+    if (
+      !result ||
+      result.success !== true ||
+      !result.responseId
+    ) {
+      throw new Error(
+        result?.error ||
+        "OpenAI 未回傳可驗證的指令結果"
       );
+    }
 
-      if (
-        !result ||
-        result.success !== true ||
-        result.provider !== "OpenAI" ||
-        !result.responseId
-      ) {
-        throw new Error(
-          "OpenAI 未回傳可驗證的指令結果"
-        );
-      }
-
-      if (result.needsClarification) {
-        setCommandStatus(
-          result.reply ||
-          "我還不確定你想修改哪個角色，請先選取角色。"
-        );
-
-        say(
-          result.reply ||
-          "你想修改哪個角色呢？"
-        );
-
-        return;
-      }
-
-      const operations = Array.isArray(
-        result.operations
-      )
-        ? result.operations
-        : [];
-
-      if (operations.length === 0) {
-        setCommandStatus(
-          result.reply ||
-          "AI 已經理解，但沒有產生需要執行的變化。"
-        );
-        return;
-      }
-
-      if (
-        typeof window.applyMindspaceAIOperations !==
-        "function"
-      ) {
-        throw new Error(
-          "sketch.js 尚未載入 AI 指令執行器"
-        );
-      }
-
-      const applied =
-        await window.applyMindspaceAIOperations(
-          operations
-        );
-
-      if (applied === false) {
-        throw new Error(
-          "角色變化沒有成功套用"
-        );
-      }
-
+    if (result.needsClarification) {
       const reply =
         result.reply ||
-        "你的想像已經進入 Mindspace！";
+        "請告訴我你想修改哪個角色。";
 
       setCommandStatus(reply);
       say(reply);
 
-      chatInput.value = "";
-
-    } catch (error) {
-      const message =
-        error?.message || String(error);
-
-      setCommandStatus(
-        "指令沒有完成：" + message,
-        true
-      );
-
-      say(
-        "這次沒有成功，請再試一次。"
-      );
-
-    } finally {
-      setBusy(false);
-      endCommand();
-      updateSelectionLabel();
-    }
-  }
-
-  /* ---------------------------------------
-     07｜文字指令
-  --------------------------------------- */
-
-  commandSend.onclick = () => {
-    submitMindspaceCommand(chatInput.value);
-  };
-
-  chatInput.addEventListener(
-    "keydown",
-    event => {
-      if (
-        event.key === "Enter" &&
-        !event.shiftKey &&
-        !event.isComposing
-      ) {
-        event.preventDefault();
-
-        submitMindspaceCommand(
-          chatInput.value
-        );
-      }
-    }
-  );
-
-  /* ---------------------------------------
-     08｜語音辨識
-     瀏覽器負責語音轉文字
-     OpenAI 負責理解想像指令
-  --------------------------------------- */
-
-  function updateVoiceButton() {
-    micButton.textContent =
-      commandListening
-        ? "⏹️ 結束說話"
-        : "🎙️ 說出我的想像";
-
-    micButton.style.background =
-      commandListening
-        ? "#ffe0d8"
-        : "#e5f1fc";
-
-    micButton.setAttribute(
-      "aria-pressed",
-      String(commandListening)
-    );
-  }
-
-  function stopCommandVoice(cancel = false) {
-    if (!commandRecognition) return;
-
-    if (cancel) {
-      commandVoiceError = true;
-      commandRecognition.abort();
-    } else {
-      commandRecognition.stop();
-    }
-  }
-
-  function startCommandVoice() {
-    if (commandListening) {
-      stopCommandVoice();
       return;
     }
 
-    if (commandBusy) return;
+    const operations =
+      Array.isArray(result.operations)
+        ? result.operations
+        : [];
 
-    if (!Recognition) {
-      setCommandStatus(
-        "目前瀏覽器不支援語音辨識，請使用 Chrome、Edge 或文字輸入。",
-        true
-      );
+    if (operations.length === 0) {
+      const reply =
+        result.reply ||
+        "AI 已經理解，但沒有產生需要執行的變化。";
+
+      setCommandStatus(reply);
+      say(reply);
+
       return;
     }
 
     if (
-      !(window.mindspaceCreations || []).length
+      typeof window.applyMindspaceAIOperations !==
+      "function"
     ) {
-      setCommandStatus(
-        "請先拍照創造積木作品。",
-        true
-      );
-      return;
-    }
-
-    const recognition = new Recognition();
-
-    commandRecognition = recognition;
-    commandVoiceError = false;
-    commandTranscript = "";
-
-    const previousText =
-      chatInput.value.trim();
-
-    recognition.lang = "zh-TW";
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      commandListening = true;
-      beginCommand();
-      updateVoiceButton();
-
-      setCommandStatus(
-        "🎙️ 正在聆聽你的想像……"
-      );
-
-      say("我正在聽你的想像！");
-    };
-
-    recognition.onresult = event => {
-      let finalText = "";
-      let interimText = "";
-
-      for (
-        let i = 0;
-        i < event.results.length;
-        i++
-      ) {
-        const text =
-          event.results[i][0]?.transcript || "";
-
-        if (event.results[i].isFinal) {
-          finalText += text;
-        } else {
-          interimText += text;
-        }
-      }
-
-      commandTranscript = (
-        finalText + interimText
-      ).trim();
-
-      chatInput.value = [
-        previousText,
-        commandTranscript
-      ].filter(Boolean).join("\n");
-
-      setCommandStatus(
-        "聽到：" + commandTranscript
-      );
-    };
-
-    recognition.onerror = event => {
-      commandVoiceError = true;
-
-      const messages = {
-        "not-allowed":
-          "麥克風權限被拒絕。",
-        "no-speech":
-          "沒有聽到聲音，請再試一次。",
-        "audio-capture":
-          "找不到可用的麥克風。",
-        "network":
-          "語音辨識服務無法連線。"
-      };
-
-      setCommandStatus(
-        messages[event.error] ||
-        "語音辨識失敗：" + event.error,
-        true
-      );
-    };
-
-    recognition.onend = () => {
-      commandListening = false;
-      commandRecognition = null;
-
-      updateVoiceButton();
-
-      if (commandVoiceError) {
-        endCommand();
-        return;
-      }
-
-      if (!commandTranscript) {
-        setCommandStatus(
-          "沒有取得語音內容，請再說一次。",
-          true
-        );
-        endCommand();
-        return;
-      }
-
-      submitMindspaceCommand(
-        chatInput.value
-      );
-    };
-
-    try {
-      recognition.start();
-    } catch (error) {
-      commandRecognition = null;
-      commandListening = false;
-
-      updateVoiceButton();
-      endCommand();
-
-      setCommandStatus(
-        "無法啟動麥克風：" + error.message,
-        true
+      throw new Error(
+        "sketch.js 的 AI 指令執行器尚未載入。"
       );
     }
-  }
 
-  /* ---------------------------------------
-     09｜連接現有按鈕
-  --------------------------------------- */
-
-  micButton.onclick = startCommandVoice;
-
-  bubbleMic.onclick = () => {
-    const classificationModal =
-      $command("classificationModal");
+    const execution =
+      await window.applyMindspaceAIOperations(
+        operations
+      );
 
     if (
-      classificationModal &&
-      !classificationModal.classList.contains(
-        "hidden"
+      execution === false ||
+      execution?.success === false ||
+      (
+        typeof execution?.applied === "number" &&
+        execution.applied === 0
       )
     ) {
-      startCreationVoice();
+      throw new Error(
+        "OpenAI 已回覆，但角色變化未成功套用。"
+      );
+    }
+
+    const reply =
+      result.reply ||
+      "你的想像已經進入 Mindspace！";
+
+    setCommandStatus(
+      reply,
+      "success"
+    );
+
+    say(reply);
+
+    $("chatInput").value = "";
+
+    updateCommandSelection();
+
+  } catch (error) {
+    const message =
+      error?.message || String(error);
+
+    setCommandStatus(
+      "指令沒有完成：" + message,
+      "error"
+    );
+
+    say(
+      "這次沒有成功，請再試一次。"
+    );
+
+  } finally {
+    setCommandBusy(false);
+    finishMindspaceCommand();
+  }
+}
+
+/* =====================================================
+   17｜文字輸入與送出
+===================================================== */
+
+$("mindspaceCommandSend").onclick = () => {
+  submitMindspaceCommand(
+    $("chatInput").value
+  );
+};
+
+$("chatInput").addEventListener(
+  "keydown",
+  event => {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !event.isComposing
+    ) {
+      event.preventDefault();
+
+      submitMindspaceCommand(
+        $("chatInput").value
+      );
+    }
+  }
+);
+
+/* =====================================================
+   18｜自由創作語音
+===================================================== */
+
+let commandRecognition = null;
+let commandListening = false;
+let commandVoiceError = false;
+let commandVoiceCancelled = false;
+
+function updateCommandMicButtons() {
+  $("micButton").textContent =
+    commandListening
+      ? "⏹️ 結束說話"
+      : "🎙️ 說出我的想像";
+
+  $("bubbleMic").textContent =
+    commandListening
+      ? "⏹️"
+      : "🎙️";
+
+  $("bubbleMic").classList.toggle(
+    "listening",
+    commandListening
+  );
+
+  $("micButton").setAttribute(
+    "aria-pressed",
+    String(commandListening)
+  );
+}
+
+function stopCommandVoice(
+  cancel = false
+) {
+  if (!commandRecognition) return;
+
+  if (cancel) {
+    commandVoiceCancelled = true;
+    commandRecognition.abort();
+  } else {
+    commandRecognition.stop();
+  }
+}
+
+function startCommandVoice() {
+  if (commandListening) {
+    stopCommandVoice();
+    return;
+  }
+
+  if (mindspaceCommandBusy) return;
+
+  if (!SpeechRecognitionClass) {
+    setCommandStatus(
+      "目前瀏覽器不支援語音辨識，請使用 Chrome、Edge 或文字輸入。",
+      "error"
+    );
+
+    $("sidebar").classList.add("open");
+
+    return;
+  }
+
+  if (
+    !(window.mindspaceCreations || []).length
+  ) {
+    setCommandStatus(
+      "請先拍照創造積木作品。",
+      "error"
+    );
+
+    $("sidebar").classList.add("open");
+
+    return;
+  }
+
+  const recognition =
+    new SpeechRecognitionClass();
+
+  commandRecognition = recognition;
+  commandVoiceError = false;
+  commandVoiceCancelled = false;
+
+  const previous =
+    $("chatInput").value.trim();
+
+  let transcript = "";
+
+  recognition.lang = "zh-TW";
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    commandListening = true;
+
+    updateCommandMicButtons();
+
+    beginMindspaceCommand();
+
+    setCommandStatus(
+      "🎙️ 正在聆聽你的想像……"
+    );
+
+    say(
+      "我正在聽你的想像！"
+    );
+  };
+
+  recognition.onresult = event => {
+    let finalText = "";
+    let interimText = "";
+
+    for (
+      let i = 0;
+      i < event.results.length;
+      i++
+    ) {
+      const recognized =
+        event.results[i][0]?.transcript || "";
+
+      if (event.results[i].isFinal) {
+        finalText += recognized;
+      } else {
+        interimText += recognized;
+      }
+    }
+
+    transcript =
+      (finalText + interimText).trim();
+
+    $("chatInput").value =
+      [previous, transcript]
+        .filter(Boolean)
+        .join("\n");
+
+    setCommandStatus(
+      "🎙️ 聽到：" + transcript
+    );
+  };
+
+  recognition.onerror = event => {
+    commandVoiceError = true;
+
+    const messages = {
+      "not-allowed":
+        "麥克風權限被拒絕，請允許瀏覽器使用麥克風。",
+      "service-not-allowed":
+        "瀏覽器未允許語音辨識服務。",
+      "no-speech":
+        "沒有聽到聲音，請再試一次。",
+      "audio-capture":
+        "找不到可用的麥克風。",
+      "network":
+        "語音辨識服務無法連線，請檢查網路。"
+    };
+
+    setCommandStatus(
+      messages[event.error] ||
+      "語音辨識失敗：" + event.error,
+      "error"
+    );
+  };
+
+  recognition.onend = () => {
+    commandListening = false;
+    commandRecognition = null;
+
+    updateCommandMicButtons();
+
+    if (
+      commandVoiceCancelled ||
+      commandVoiceError
+    ) {
+      finishMindspaceCommand();
       return;
     }
 
-    $command("sidebar").classList.add(
-      "open"
-    );
+    if (!transcript.trim()) {
+      setCommandStatus(
+        "沒有取得語音內容，請再說一次。",
+        "error"
+      );
 
-    startCommandVoice();
+      finishMindspaceCommand();
+      return;
+    }
+
+    submitMindspaceCommand(
+      $("chatInput").value
+    );
   };
 
-  /* ---------------------------------------
-     10｜選取提示初始狀態
-  --------------------------------------- */
+  try {
+    recognition.start();
 
-  updateVoiceButton();
+  } catch (error) {
+    commandRecognition = null;
+    commandListening = false;
 
-  console.info(
-    "[Mindspace] 文字與語音 AI 指令介面已載入"
-  );
+    updateCommandMicButtons();
+    finishMindspaceCommand();
 
-})();
+    setCommandStatus(
+      "無法啟動麥克風：" +
+      error.message,
+      "error"
+    );
+  }
+}
+
+/* =====================================================
+   19｜工作台與泡泡麥克風
+===================================================== */
+
+$("micButton").onclick =
+  startCommandVoice;
+
+$("bubbleMic").onclick = () => {
+  const classificationOpen =
+    !$("classificationModal")
+      .classList.contains("hidden");
+
+  if (classificationOpen) {
+    startCreationVoice();
+    return;
+  }
+
+  if (!commandListening) {
+    $("sidebar").classList.add("open");
+    updateCommandSelection();
+  }
+
+  startCommandVoice();
+};
+
+/* =====================================================
+   20｜初始化
+===================================================== */
+
+updateCommandMicButtons();
+updateCreationMicButton();
+updateCommandSelection();
+
+connectBridge();
+
 </script>
+
+<script src="./sketch.js"></script>
 
 </body>
 </html>
-
