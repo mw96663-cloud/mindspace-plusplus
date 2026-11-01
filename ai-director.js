@@ -1,1913 +1,558 @@
 
 "use strict";
 
-/* =========================================================
-   MINDSPACE PLUS-PLUS
-   AI DIRECTOR
-
-   二評核心：
-
-   1. 孩子是創作者與操作者
-   2. AI 負責理解與協助轉譯
-   3. 不限制孩子的想像內容
-   4. 所有生成視覺保持 Plus-Plus 風格
-   5. 原始積木作品永遠保留
-   6. 角色、環境、配件與故事持續累積
-   7. 角色變身必須作用在原本角色身上
-
-   注意：
-   本檔案需要搭配新版 sketch.js
-   以及新版 Code.gs。
-========================================================= */
+/*
+ * =========================================================
+ * Mindspace Plus-Plus
+ * ai-director.js | Voice Director v1
+ *
+ * 目的：
+ * 1. 讀取目前 p5.js 世界中的角色
+ * 2. 透過既有 Bridge 呼叫真實 OpenAI
+ * 3. 將 AI 回傳的創作指令整理成統一格式
+ * 4. 保留原始角色與現有自主移動
+ * 5. 等待 sketch.js 的視覺執行器接手
+ *
+ * 不負責：
+ * - 改寫 Bridge 握手
+ * - 修改原始 PNG
+ * - 清空世界
+ * - 使用假 AI 回覆
+ * - 假裝視覺效果已完成
+ * =========================================================
+ */
 
 (function () {
 
-  /* =======================================================
-     01｜Director 狀態
-  ======================================================= */
+  const VERSION = "Voice Director v1";
 
   const director = {
-
+    version: VERSION,
     busy: false,
-
     queue: [],
-
-    running: false,
-
-    objects: new Map(),
-
-    accessories: new Map(),
-
-    activeAnimations: new Map(),
-
-    currentSpeech: null,
-
-    revision: 0,
-
+    history: [],
+    lastResult: null,
+    lastError: null,
+    selectedId: null,
+    maximumHistory: 30,
     maximumOperations: 40
-
   };
 
-  /* =======================================================
-     02｜基礎工具
-  ======================================================= */
+  /*
+   * 01｜基本工具
+   */
 
-  const element = id =>
-    document.getElementById(id);
+  function asText(value, fallback = "") {
+    if (typeof value === "string") {
+      return value.trim();
+    }
 
-  const number = (
-    value,
-    fallback = 0
-  ) => {
-    const result = Number(value);
+    if (
+      value === null ||
+      value === undefined
+    ) {
+      return fallback;
+    }
 
-    return Number.isFinite(result)
-      ? result
-      : fallback;
-  };
+    return String(value).trim();
+  }
 
-  const limit = (
-    value,
-    minimum,
-    maximum
-  ) =>
-    Math.max(
-      minimum,
-      Math.min(
-        maximum,
-        value
-      )
+  function makeId() {
+    if (
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+    ) {
+      return crypto.randomUUID();
+    }
+
+    return (
+      "mindspace_" +
+      Date.now() +
+      "_" +
+      Math.random().toString(36).slice(2)
+    );
+  }
+
+  function emit(name, detail) {
+    window.dispatchEvent(
+      new CustomEvent(name, {
+        detail
+      })
+    );
+  }
+
+  /*
+   * 02｜讀取 p5.js 世界
+   *
+   * 直接使用 sketch.js 已公開的陣列。
+   * 不建立另一份互不相通的角色資料。
+   */
+
+  function getCreations() {
+    return Array.isArray(
+      window.mindspaceCreations
+    )
+      ? window.mindspaceCreations
+      : [];
+  }
+
+  function getCharacters() {
+    return getCreations().filter(
+      item => item.kind === "character"
+    );
+  }
+
+  function getCreationById(id) {
+    if (!id) return null;
+
+    return getCreations().find(
+      item => item.id === id
+    ) || null;
+  }
+
+  function getSelectedCreation() {
+    const selected = getCreationById(
+      director.selectedId
     );
 
-  const wait = milliseconds =>
-    new Promise(resolve =>
-      setTimeout(
-        resolve,
-        milliseconds
-      )
-    );
+    if (selected) return selected;
 
-  const makeId = () =>
-    "pp_" +
-    Date.now().toString(36) +
-    "_" +
-    Math.random()
-      .toString(36)
-      .slice(2, 9);
+    const characters = getCharacters();
 
-  function findCreation(id) {
+    if (characters.length === 1) {
+      return characters[0];
+    }
+
+    return null;
+  }
+
+  /*
+   * 03｜角色選擇
+   *
+   * 目前不修改 sketch.js 的點選與拖曳。
+   * 後續可由 index.html 的操作介面
+   * 主動呼叫 selectCreation(id)。
+   */
+
+  function selectCreation(id) {
     if (!id) {
+      director.selectedId = null;
       return null;
     }
 
-    return creationById(id);
+    const item = getCreationById(id);
+
+    if (!item) {
+      throw new Error(
+        "找不到指定的積木作品：" + id
+      );
+    }
+
+    director.selectedId = item.id;
+
+    emit("mindspace:selection", {
+      creationId: item.id,
+      name: item.name || item.identity || ""
+    });
+
+    return item;
   }
 
-  function getCurrentCreation() {
-    return creationById(
-      state.selectedId
-    );
-  }
+  /*
+   * 04｜建立提供給 AI 的世界資訊
+   *
+   * 只傳送描述性資料，不傳送原始圖片。
+   * 原始 PNG 仍留在 p5.js 世界。
+   */
 
-  function getCreationElement(id) {
-    return document.querySelector(
-      '[data-creation-id="' +
-      id +
-      '"]'
-    );
-  }
-
-  function getObjectElement(id) {
-    return document.querySelector(
-      '[data-plusplus-object-id="' +
-      id +
-      '"]'
-    );
-  }
-
-  function getAccessoryElement(id) {
-    return document.querySelector(
-      '[data-plusplus-accessory-id="' +
-      id +
-      '"]'
-    );
-  }
-
-  function getWorldDimensions() {
-    const world =
-      element("world");
-
+  function summarizeCreation(item) {
     return {
-      width:
-        world?.clientWidth ||
-        window.innerWidth,
-
-      height:
-        world?.clientHeight ||
-        window.innerHeight
+      id: item.id,
+      kind: item.kind || "unclassified",
+      name: item.name || "",
+      identity: item.identity || "",
+      description: item.description || "",
+      personality: item.personality || "",
+      movement: item.movement || "float",
+      abilities: Array.isArray(item.abilities)
+        ? item.abilities.slice(0, 12)
+        : [],
+      worldType: item.worldType || "",
+      x: Number.isFinite(item.x)
+        ? Math.round(item.x)
+        : null,
+      y: Number.isFinite(item.y)
+        ? Math.round(item.y)
+        : null
     };
   }
 
-  function ensureDirectorLayer() {
-    let layer =
-      element("plusplusDirectorLayer");
+  function getWorldContext() {
+    const creations = getCreations();
 
-    if (!layer) {
-      layer =
-        document.createElement("div");
+    const worldState =
+      typeof window.getMindspaceWorldState ===
+      "function"
+        ? window.getMindspaceWorldState()
+        : null;
 
-      layer.id =
-        "plusplusDirectorLayer";
+    return {
+      selectedCreationId:
+        getSelectedCreation()?.id || null,
 
-      layer.style.position =
-        "absolute";
+      creations:
+        creations
+          .slice(0, 50)
+          .map(summarizeCreation),
 
-      layer.style.inset = "0";
-
-      layer.style.zIndex = "5";
-
-      layer.style.pointerEvents =
-        "none";
-
-      element("world")
-        ?.appendChild(layer);
-    }
-
-    return layer;
+      worlds:
+        Array.isArray(worldState?.worlds)
+          ? worldState.worlds.slice(0, 30)
+          : []
+    };
   }
 
-  /* =======================================================
-     03｜解析 AI 指令
-
-     AI 後端應回傳結構化操作。
-
-     例如：
-
-     {
-       reply: "好！你的魚要飛起來了！",
-       operations: [
-         {
-           type: "transform",
-           targetId: "...",
-           prompt: "..."
-         },
-         {
-           type: "create_accessory",
-           targetId: "...",
-           prompt: "..."
-         },
-         {
-           type: "move",
-           targetId: "...",
-           to: { x: 0.7, y: 0.2 }
-         }
-       ]
-     }
-
-     這裡的 type 是程式操作類型，
-     不是限制孩子能創造什麼。
-  ======================================================= */
+  /*
+   * 05｜整理 AI 回傳資料
+   *
+   * 兼容 operations / actions / timeline。
+   * 不自行產生 AI 沒有回傳的操作。
+   */
 
   function normalizeOperations(result) {
-    if (!result) {
+    if (!result || typeof result !== "object") {
       return [];
     }
 
     let operations =
-      result.operations ||
-      result.actions ||
-      result.timeline ||
-      result.events ||
+      result.operations ??
+      result.actions ??
+      result.timeline ??
       [];
 
-    if (
-      typeof operations === "string"
-    ) {
+    if (typeof operations === "string") {
       try {
-        operations =
-          JSON.parse(operations);
-      } catch (error) {
+        operations = JSON.parse(operations);
+      } catch {
         operations = [];
       }
     }
 
     if (
-      !Array.isArray(operations)
+      !Array.isArray(operations) &&
+      operations &&
+      typeof operations === "object"
     ) {
-      if (
-        operations &&
-        typeof operations === "object"
-      ) {
-        operations = [
-          operations
-        ];
-      } else {
-        operations = [];
-      }
+      operations = [operations];
+    }
+
+    if (!Array.isArray(operations)) {
+      return [];
     }
 
     return operations
       .filter(
         operation =>
           operation &&
-          typeof operation === "object"
+          typeof operation === "object" &&
+          !Array.isArray(operation)
       )
       .slice(
         0,
         director.maximumOperations
-      );
+      )
+      .map(operation => ({
+        ...operation,
+        type: asText(
+          operation.type || operation.action
+        ).toLowerCase()
+      }))
+      .filter(operation => operation.type);
   }
 
-  /* =======================================================
-     04｜AI 指令執行入口
-  ======================================================= */
+  function normalizeResult(raw) {
+    let result = raw;
 
-  async function executePlusPlusAIResponse(
-    result,
-    context = {}
-  ) {
-    const operations =
-      normalizeOperations(
-        result
-      );
+    if (typeof result === "string") {
+      try {
+        result = JSON.parse(result);
+      } catch {
+        throw new Error(
+          "AI 回傳的內容不是有效 JSON"
+        );
+      }
+    }
 
     if (
-      operations.length === 0
+      !result ||
+      typeof result !== "object"
     ) {
-      return;
+      throw new Error(
+        "AI 沒有回傳有效的指令資料"
+      );
     }
 
-    const request = {
-      id: makeId(),
-
-      operations,
-
-      context,
-
-      createdAt:
-        Date.now()
-    };
-
-    director.queue.push(
-      request
-    );
-
-    if (!director.running) {
-      await runDirectorQueue();
-    }
-  }
-
-  /* =======================================================
-     05｜故事事件佇列
-  ======================================================= */
-
-  async function runDirectorQueue() {
-    if (director.running) {
-      return;
-    }
-
-    director.running = true;
-
-    try {
-      while (
-        director.queue.length > 0
-      ) {
-        const request =
-          director.queue.shift();
-
-        await executeOperationSequence(
-          request.operations,
-          request.context
-        );
-      }
-    } finally {
-      director.running = false;
-    }
-  }
-
-  async function executeOperationSequence(
-    operations,
-    context
-  ) {
-    for (
-      const operation of
-      operations
+    if (
+      result.result &&
+      typeof result.result === "object" &&
+      !result.operations &&
+      !result.actions
     ) {
-      try {
-        await executeOneOperation(
-          operation,
-          context
-        );
-      } catch (error) {
-        console.error(
-          "[PlusPlus Director]",
-          operation,
-          error
-        );
-
-        status(
-          "⚠️ 有一個想像事件未完成：" +
-          error.message
-        );
-      }
+      result = result.result;
     }
+
+    return {
+      reply: asText(
+        result.reply ||
+        result.message ||
+        result.response
+      ),
+
+      operations: normalizeOperations(result),
+
+      raw: result
+    };
   }
 
-  /* =======================================================
-     06｜操作分派器
-  ======================================================= */
+  /*
+   * 06｜真實 AI 呼叫
+   *
+   * 使用 index.html 已存在的 requestAI。
+   * 不自行建立另一套網路請求。
+   */
 
-  async function executeOneOperation(
-    operation,
-    context = {}
-  ) {
-    const type =
-      String(
-        operation.type ||
-        operation.action ||
-        ""
-      ).toLowerCase();
-
-    switch (type) {
-
-      case "transform":
-      case "morph":
-        return await transformPlusPlusCreation(
-          operation,
-          context
-        );
-
-      case "create_accessory":
-      case "attach":
-      case "accessory":
-        return await createPlusPlusAccessory(
-          operation,
-          context
-        );
-
-      case "create_character":
-      case "spawn_character":
-        return await createPlusPlusCharacter(
-          operation,
-          context
-        );
-
-      case "create_object":
-      case "spawn_object":
-      case "create":
-        return await createPlusPlusObject(
-          operation,
-          context
-        );
-
-      case "move":
-      case "fly":
-      case "swim":
-      case "walk":
-        return await movePlusPlusEntity(
-          operation,
-          context
-        );
-
-      case "rotate":
-      case "turn":
-        return await rotatePlusPlusEntity(
-          operation,
-          context
-        );
-
-      case "scale":
-      case "grow":
-      case "shrink":
-        return await scalePlusPlusEntity(
-          operation,
-          context
-        );
-
-      case "shake":
-      case "pulse":
-        return await animatePlusPlusEntity(
-          operation,
-          context
-        );
-
-      case "effect":
-      case "emit":
-      case "particles":
-        return await generatePlusPlusEffect(
-          operation,
-          context
-        );
-
-      case "environment":
-      case "change_environment":
-      case "generate_environment":
-        return await modifyPlusPlusEnvironment(
-          operation,
-          context
-        );
-
-      case "speak":
-        return await speakPlusPlusLine(
-          operation,
-          context
-        );
-
-      case "wait":
-        return await wait(
-          limit(
-            number(
-              operation.duration,
-              500
-            ),
-            0,
-            10000
-          )
-        );
-
-      case "remove":
-        return removeGeneratedPlusPlusObject(
-          operation,
-          context
-        );
-
-      default:
-        console.warn(
-          "未知 AI 操作：",
-          type
-        );
-
-        return null;
-    }
-  }
-
-  /* =======================================================
-     07｜解析目標
-
-     targetId 優先，
-     其次使用目前選擇的角色。
-
-     避免 AI 改錯角色。
-  ======================================================= */
-
-  function resolveTargetId(
-    operation,
-    context
-  ) {
-    return (
-      operation.targetId ||
-      operation.creationId ||
-      operation.actorId ||
-      context.creationId ||
-      state.selectedId ||
-      null
-    );
-  }
-
-  function resolveTargetElement(
-    operation,
-    context
-  ) {
-    const id =
-      resolveTargetId(
-        operation,
-        context
-      );
-
-    return (
-      getCreationElement(id) ||
-      getObjectElement(id)
-    );
-  }
-
-  /* =======================================================
-     08｜AI 變身
-
-     核心：
-     改變原本積木角色，
-     不在旁邊另生一隻取代它。
-  ======================================================= */
-
-  async function transformPlusPlusCreation(
-    operation,
-    context
-  ) {
-    const targetId =
-      resolveTargetId(
-        operation,
-        context
-      );
-
-    const creation =
-      findCreation(
-        targetId
-      );
-
-    if (!creation) {
+  async function callVoiceAI(text, options = {}) {
+    if (typeof requestAI !== "function") {
       throw new Error(
-        "找不到要變身的原始積木"
+        "找不到 requestAI，請確認網站已載入原本的 index.html 通訊程式"
       );
     }
 
-    const prompt =
-      String(
-        operation.prompt ||
-        operation.description ||
-        operation.instruction ||
-        ""
-      );
+    const selectedId =
+      options.targetId ||
+      options.creationId ||
+      director.selectedId ||
+      getSelectedCreation()?.id ||
+      null;
 
-    if (!prompt.trim()) {
-      return;
-    }
-
-    bubble(
-      "✨ " +
-      (
-        creation.name ||
-        "積木角色"
-      ) +
-      " 正在變身！"
-    );
-
-    const result =
-      await callAI(
-        "transform",
-        {
-          image:
-            await scaledData(
-              creation.originalImage,
-              900
-            ),
-
-          instruction:
-            prompt,
-
-          style:
-            PLUSPLUS_STYLE,
-
-          preserveOriginal:
-            true,
-
-          modifyExistingCharacter:
-            true,
-
-          referenceCreationId:
-            creation.id
-        },
-        240000
-      );
-
-    const image =
-      normalizeAIImage(
-        result
-      );
-
-    /*
-      永遠不覆蓋 originalImage。
-    */
-
-    creation.transformedImage =
-      image;
-
-    creation.displayImage =
-      image;
-
-    creation.updatedAt =
-      Date.now();
-
-    updateCreationVisual(
-      creation
-    );
-
-    const hero =
-      state.heroes.find(
-        item =>
-          item.id === creation.id
-      );
-
-    if (hero) {
-      hero.transformedImage =
-        image;
-
-      hero.currentImage =
-        image;
-    }
-
-    return creation;
-  }
-
-  /* =======================================================
-     09｜AI 生成 Plus-Plus 配件
-
-     配件附著在原始角色身上，
-     隨角色移動、旋轉與縮放。
-  ======================================================= */
-
-  async function createPlusPlusAccessory(
-    operation,
-    context
-  ) {
-    const targetId =
-      resolveTargetId(
-        operation,
-        context
-      );
-
-    const creation =
-      findCreation(
-        targetId
-      );
-
-    if (!creation) {
-      throw new Error(
-        "找不到配件的附著角色"
-      );
-    }
-
-    const prompt =
-      String(
-        operation.prompt ||
-        operation.description ||
-        ""
-      );
-
-    if (!prompt) {
-      return;
-    }
-
-    const result =
-      await callAI(
-        "generatePlusPlusAsset",
-        {
-          kind:
-            "accessory",
-
-          prompt,
-
-          targetImage:
-            await scaledData(
-              creation.originalImage,
-              800
-            ),
-
-          style:
-            PLUSPLUS_STYLE,
-
-          transparentBackground:
-            true,
-
-          preserveOriginal:
-            true
-        },
-        240000
-      );
-
-    const source =
-      normalizeAIImage(
-        result
-      );
-
-    const accessory = {
-      id: makeId(),
-
-      targetId,
-
-      image: source,
-
-      description:
-        prompt,
-
-      x:
-        limit(
-          number(
-            operation.x,
-            0.5
-          ),
-          -1,
-          2
-        ),
-
-      y:
-        limit(
-          number(
-            operation.y,
-            0.25
-          ),
-          -1,
-          2
-        ),
-
-      width:
-        limit(
-          number(
-            operation.width,
-            0.6
-          ),
-          0.05,
-          3
-        ),
-
-      rotation:
-        number(
-          operation.rotation,
-          0
-        ),
-
-      createdAt:
-        Date.now()
+    const payload = {
+      text,
+      utterance: text,
+      message: text,
+      instruction: text,
+      targetId: selectedId,
+      creationId: selectedId,
+      world: getWorldContext(),
+      context: getWorldContext()
     };
 
-    state.accessories.push(
-      accessory
+    const raw = await requestAI(
+      "interpretVoiceCommandAI",
+      payload,
+      120000
     );
 
-    creation.accessoryIds.push(
-      accessory.id
-    );
-
-    director.accessories.set(
-      accessory.id,
-      accessory
-    );
-
-    attachAccessoryVisual(
-      accessory
-    );
-
-    return accessory;
+    return normalizeResult(raw);
   }
 
-  /* =======================================================
-     09-A｜配件附著圖層
-  ======================================================= */
+  /*
+   * 07｜語音指令入口
+   *
+   * 一次處理一段孩子的語音文字。
+   * AI 只負責理解，孩子保有決定權。
+   */
 
-  function attachAccessoryVisual(
-    accessory
+  async function interpretSpeech(
+    speechText,
+    options = {}
   ) {
-    const parent =
-      getCreationElement(
-        accessory.targetId
-      );
-
-    if (!parent) {
-      return;
-    }
-
-    const image =
-      document.createElement("img");
-
-    image.src =
-      accessory.image;
-
-    image.alt =
-      accessory.description;
-
-    image.dataset.plusplusAccessoryId =
-      accessory.id;
-
-    image.style.position =
-      "absolute";
-
-    image.style.left =
-      accessory.x * 100 + "%";
-
-    image.style.top =
-      accessory.y * 100 + "%";
-
-    image.style.width =
-      accessory.width * 100 + "%";
-
-    image.style.height =
-      "auto";
-
-    image.style.transform =
-      "translate(-50%, -50%) " +
-      "rotate(" +
-      accessory.rotation +
-      "deg)";
-
-    image.style.pointerEvents =
-      "none";
-
-    image.style.objectFit =
-      "contain";
-
-    parent.appendChild(
-      image
-    );
-  }
-
-  /* =======================================================
-     10｜AI 生成 Plus-Plus 配角
-  ======================================================= */
-
-  async function createPlusPlusCharacter(
-    operation,
-    context
-  ) {
-    const prompt =
-      String(
-        operation.prompt ||
-        operation.description ||
-        ""
-      );
-
-    if (!prompt) {
-      return;
-    }
-
-    const result =
-      await callAI(
-        "generatePlusPlusAsset",
-        {
-          kind:
-            "character",
-
-          prompt,
-
-          style:
-            PLUSPLUS_STYLE,
-
-          transparentBackground:
-            true,
-
-          world:
-            getPlusPlusWorldContext()
-        },
-        240000
-      );
-
-    const image =
-      normalizeAIImage(
-        result
-      );
-
-    const creation =
-      createPlusPlusRecord({
-        image,
-
-        description:
-          prompt,
-
-        source:
-          "ai-story"
-      });
-
-    creation.role =
-      "character";
-
-    creation.name =
-      String(
-        operation.name ||
-        result?.name ||
-        "積木配角"
-      );
-
-    creation.x =
-      limit(
-        number(
-          operation.x,
-          0.5
-        ),
-        0.1,
-        0.9
-      );
-
-    creation.y =
-      limit(
-        number(
-          operation.y,
-          0.5
-        ),
-        0.1,
-        0.9
-      );
-
-    creation.scale =
-      limit(
-        number(
-          operation.scale,
-          0.8
-        ),
-        0.2,
-        2
-      );
-
-    creation.analysisStatus =
-      "completed";
-
-    creation.worldStatus =
-      "completed";
-
-    state.creations.push(
-      creation
-    );
-
-    state.heroes.push({
-      id:
-        creation.id,
-
-      name:
-        creation.name,
-
-      image:
-        image,
-
-      originalImage:
-        image,
-
-      currentImage:
-        image,
-
-      transformedImage:
-        null,
-
-      role:
-        "character",
-
-      x:
-        creation.x,
-
-      y:
-        creation.y,
-
-      scale:
-        creation.scale
-    });
-
-    createCreationVisual(
-      creation
-    );
-
-    initializeCharacterMotion(
-      creation
-    );
-
-    refreshHeroes();
-
-    return creation;
-  }
-
-  /* =======================================================
-     11｜AI 生成物件
-
-     可以是任何孩子描述的物件，
-     不限定糖果、星星、球等種類。
-  ======================================================= */
-
-  async function createPlusPlusObject(
-    operation,
-    context
-  ) {
-    const prompt =
-      String(
-        operation.prompt ||
-        operation.description ||
-        ""
-      );
-
-    if (!prompt) {
-      return;
-    }
-
-    const result =
-      await callAI(
-        "generatePlusPlusAsset",
-        {
-          kind:
-            "object",
-
-          prompt,
-
-          style:
-            PLUSPLUS_STYLE,
-
-          transparentBackground:
-            true,
-
-          world:
-            getPlusPlusWorldContext()
-        },
-        240000
-      );
-
-    const source =
-      normalizeAIImage(
-        result
-      );
-
-    const object = {
-      id:
-        operation.id ||
-        makeId(),
-
-      name:
-        String(
-          operation.name ||
-          "積木物件"
-        ),
-
-      description:
-        prompt,
-
-      image:
-        source,
-
-      x:
-        limit(
-          number(
-            operation.x,
-            0.5
-          ),
-          0,
-          1
-        ),
-
-      y:
-        limit(
-          number(
-            operation.y,
-            0.5
-          ),
-          0,
-          1
-        ),
-
-      scale:
-        limit(
-          number(
-            operation.scale,
-            1
-          ),
-          0.1,
-          4
-        ),
-
-      rotation:
-        number(
-          operation.rotation,
-          0
-        ),
-
-      createdAt:
-        Date.now()
-    };
-
-    state.generatedObjects.push(
-      object
-    );
-
-    director.objects.set(
-      object.id,
-      object
-    );
-
-    createObjectVisual(
-      object
-    );
-
-    return object;
-  }
-
-  /* =======================================================
-     11-A｜物件視覺
-  ======================================================= */
-
-  function createObjectVisual(
-    object
-  ) {
-    const layer =
-      ensureDirectorLayer();
-
-    if (!layer) {
-      return;
-    }
-
-    const wrapper =
-      document.createElement("div");
-
-    wrapper.dataset.plusplusObjectId =
-      object.id;
-
-    wrapper.style.position =
-      "absolute";
-
-    wrapper.style.left =
-      object.x * 100 + "%";
-
-    wrapper.style.top =
-      object.y * 100 + "%";
-
-    wrapper.style.width =
-      "min(20vw, 200px)";
-
-    wrapper.style.height =
-      "min(20vw, 200px)";
-
-    wrapper.style.transform =
-      "translate(-50%, -50%) " +
-      "scale(" +
-      object.scale +
-      ") " +
-      "rotate(" +
-      object.rotation +
-      "deg)";
-
-    wrapper.style.transformOrigin =
-      "center center";
-
-    const image =
-      document.createElement("img");
-
-    image.src =
-      object.image;
-
-    image.alt =
-      object.description;
-
-    image.style.width =
-      "100%";
-
-    image.style.height =
-      "100%";
-
-    image.style.objectFit =
-      "contain";
-
-    wrapper.appendChild(
-      image
-    );
-
-    layer.appendChild(
-      wrapper
-    );
-  }
-
-  /* =======================================================
-     12｜角色或物件移動
-  ======================================================= */
-
-  async function movePlusPlusEntity(
-    operation,
-    context
-  ) {
-    const targetId =
-      resolveTargetId(
-        operation,
-        context
-      );
-
-    const creation =
-      findCreation(
-        targetId
-      );
-
-    const object =
-      director.objects.get(
-        targetId
-      );
-
-    const target =
-      creation || object;
-
-    if (!target) {
-      return;
-    }
-
-    const destination =
-      operation.to ||
-      operation.destination ||
-      {};
-
-    const endX =
-      limit(
-        number(
-          destination.x ??
-          operation.x,
-          target.x
-        ),
-        0.05,
-        0.95
-      );
-
-    const endY =
-      limit(
-        number(
-          destination.y ??
-          operation.y,
-          target.y
-        ),
-        0.05,
-        0.95
-      );
-
-    const duration =
-      limit(
-        number(
-          operation.duration,
-          1600
-        ),
-        100,
-        20000
-      );
-
-    const startX =
-      target.x;
-
-    const startY =
-      target.y;
-
-    const startTime =
-      performance.now();
-
-    const creationElement =
-      getCreationElement(
-        targetId
-      );
-
-    const objectElement =
-      getObjectElement(
-        targetId
-      );
-
-    const visual =
-      creationElement ||
-      objectElement;
-
-    if (!visual) {
-      return;
-    }
-
-    /*
-      暫停角色自主漫遊，
-      避免 AI 動畫與自主移動衝突。
-    */
-
-    if (creation) {
-      creation.motion =
-        creation.motion || {};
-
-      creation.motion.directorControlled =
-        true;
-    }
-
-    await new Promise(resolve => {
-      function frame(now) {
-        const progress =
-          limit(
-            (
-              now -
-              startTime
-            ) / duration,
-            0,
-            1
-          );
-
-        const eased =
-          progress *
-          progress *
-          (
-            3 -
-            2 * progress
-          );
-
-        target.x =
-          startX +
-          (
-            endX -
-            startX
-          ) * eased;
-
-        target.y =
-          startY +
-          (
-            endY -
-            startY
-          ) * eased;
-
-        if (creation) {
-          updateCreationPosition(
-            creation
-          );
-        } else {
-          visual.style.left =
-            target.x * 100 + "%";
-
-          visual.style.top =
-            target.y * 100 + "%";
-        }
-
-        if (progress < 1) {
-          requestAnimationFrame(
-            frame
-          );
-        } else {
-          resolve();
-        }
-      }
-
-      requestAnimationFrame(
-        frame
-      );
-    });
-
-    if (creation?.motion) {
-      creation.motion.directorControlled =
-        false;
-
-      creation.motion.targetX =
-        creation.x;
-
-      creation.motion.targetY =
-        creation.y;
-
-      creation.motion.nextDecision =
-        performance.now() + 2000;
-    }
-  }
-
-  /* =======================================================
-     13｜旋轉
-  ======================================================= */
-
-  async function rotatePlusPlusEntity(
-    operation,
-    context
-  ) {
-    const targetId =
-      resolveTargetId(
-        operation,
-        context
-      );
-
-    const creation =
-      findCreation(
-        targetId
-      );
-
-    const object =
-      director.objects.get(
-        targetId
-      );
-
-    const target =
-      creation || object;
-
-    if (!target) {
-      return;
-    }
-
-    const degrees =
-      number(
-        operation.rotation ??
-        operation.angle,
-        90
-      );
-
-    target.rotation =
-      number(
-        target.rotation,
-        0
-      ) + degrees;
-
-    if (creation) {
-      updateCreationPosition(
-        creation
-      );
-    } else {
-      updateObjectTransform(
-        object
-      );
-    }
-  }
-
-  /* =======================================================
-     14｜縮放
-  ======================================================= */
-
-  async function scalePlusPlusEntity(
-    operation,
-    context
-  ) {
-    const targetId =
-      resolveTargetId(
-        operation,
-        context
-      );
-
-    const creation =
-      findCreation(
-        targetId
-      );
-
-    const object =
-      director.objects.get(
-        targetId
-      );
-
-    const target =
-      creation || object;
-
-    if (!target) {
-      return;
-    }
-
-    const scale =
-      limit(
-        number(
-          operation.scale ??
-          operation.value,
-          1.5
-        ),
-        0.1,
-        5
-      );
-
-    target.scale =
-      scale;
-
-    if (creation) {
-      updateCreationPosition(
-        creation
-      );
-    } else {
-      updateObjectTransform(
-        object
-      );
-    }
-  }
-
-  /* =======================================================
-     14-A｜更新 AI 物件 transform
-  ======================================================= */
-
-  function updateObjectTransform(
-    object
-  ) {
-    const visual =
-      getObjectElement(
-        object.id
-      );
-
-    if (!visual) {
-      return;
-    }
-
-    visual.style.transform =
-      "translate(-50%, -50%) " +
-      "scale(" +
-      object.scale +
-      ") " +
-      "rotate(" +
-      object.rotation +
-      "deg)";
-  }
-
-  /* =======================================================
-     15｜通用角色動畫
-
-     shake / pulse 只是動畫引擎，
-     不限制孩子創造的技能類型。
-  ======================================================= */
-
-  async function animatePlusPlusEntity(
-    operation,
-    context
-  ) {
-    const visual =
-      resolveTargetElement(
-        operation,
-        context
-      );
-
-    if (!visual) {
-      return;
-    }
-
-    const type =
-      String(
-        operation.type ||
-        "pulse"
-      );
-
-    const duration =
-      limit(
-        number(
-          operation.duration,
-          1000
-        ),
-        100,
-        10000
-      );
-
-    const original =
-      visual.style.filter;
-
-    if (type === "pulse") {
-      visual.animate(
-        [
-          {
-            filter:
-              "brightness(1)"
-          },
-          {
-            filter:
-              "brightness(1.6)"
-          },
-          {
-            filter:
-              "brightness(1)"
-          }
-        ],
-        {
-          duration,
-          iterations: 1
-        }
-      );
-    } else {
-      visual.animate(
-        [
-          {
-            translate:
-              "0 0"
-          },
-          {
-            translate:
-              "-10px 0"
-          },
-          {
-            translate:
-              "10px 0"
-          },
-          {
-            translate:
-              "0 0"
-          }
-        ],
-        {
-          duration,
-          iterations: 1
-        }
-      );
-    }
-
-    await wait(
-      duration
-    );
-
-    visual.style.filter =
-      original;
-  }
-
-  /* =======================================================
-     16｜AI 自由特效
-
-     AI 可以要求生成任意形狀的
-     Plus-Plus 特效素材。
-
-     若後端提供圖片，
-     以圖片作為特效粒子。
-  ======================================================= */
-
-  async function generatePlusPlusEffect(
-    operation,
-    context
-  ) {
-    const prompt =
-      String(
-        operation.prompt ||
-        operation.description ||
-        ""
-      );
-
-    const targetId =
-      resolveTargetId(
-        operation,
-        context
-      );
-
-    const creation =
-      findCreation(
-        targetId
-      ) ||
-      getCurrentCreation();
-
-    if (!creation) {
-      return;
-    }
-
-    let image = null;
-
-    if (prompt) {
-      try {
-        const result =
-          await callAI(
-            "generatePlusPlusAsset",
-            {
-              kind:
-                "effect",
-
-              prompt,
-
-              style:
-                PLUSPLUS_STYLE,
-
-              transparentBackground:
-                true
-            },
-            240000
-          );
-
-        image =
-          normalizeAIImage(
-            result
-          );
-      } catch (error) {
-        console.warn(
-          "特效圖片生成失敗，改用積木粒子",
-          error
-        );
-      }
-    }
-
-    const effect = {
-      description:
-        prompt,
-
-      image,
-
-      count:
-        number(
-          operation.count,
-          35
-        ),
-
-      direction:
-        operation.direction ||
-        "down",
-
-      speed:
-        number(
-          operation.speed,
-          1
-        ),
-
-      duration:
-        number(
-          operation.duration,
-          3000
-        ),
-
-      colors:
-        operation.colors ||
-        [
-          "#ffb6d5",
-          "#a4dfff",
-          "#ffe29b"
-        ]
-    };
-
-    /*
-      使用第三段的特效系統。
-    */
-
-    playPlusPlusEnvironmentEffect(
-      effect,
-      creation
-    );
-  }
-
-  /* =======================================================
-     17｜修改環境
-
-     可以讓 AI：
-     - 增加建築
-     - 延伸地形
-     - 改變天空
-     - 生成特殊場景
-     - 改變原有環境
-
-     不限制固定世界主題。
-  ======================================================= */
-
-  async function modifyPlusPlusEnvironment(
-    operation,
-    context
-  ) {
-    const prompt =
-      String(
-        operation.prompt ||
-        operation.description ||
-        ""
-      );
-
-    if (!prompt) {
-      return;
-    }
-
-    const creation =
-      findCreation(
-        resolveTargetId(
-          operation,
-          context
-        )
-      );
-
-    const result =
-      await callAI(
-        "generateWorld",
-        {
-          mode:
-            "modify",
-
-          instruction:
-            prompt,
-
-          sourceCreationId:
-            creation?.id ||
-            null,
-
-          world:
-            getPlusPlusWorldContext(),
-
-          style:
-            PLUSPLUS_STYLE,
-
-          accumulate:
-            true,
-
-          preserveExisting:
-            true
-        },
-        240000
-      );
-
-    await applyGeneratedWorld(
-      result,
-      creation || {
-        id:
-          "voice-environment"
-      },
-      "environment"
-    );
-  }
-
-  /* =======================================================
-     18｜AI 角色說話
-  ======================================================= */
-
-  async function speakPlusPlusLine(
-    operation,
-    context
-  ) {
-    const text =
-      String(
-        operation.text ||
-        operation.message ||
-        ""
-      );
+    const text = asText(speechText);
 
     if (!text) {
-      return;
+      throw new Error(
+        "請先說出想讓角色做什麼"
+      );
     }
 
-    bubble(text);
+    if (director.busy) {
+      throw new Error(
+        "上一段想像指令還在理解中，請稍候"
+      );
+    }
 
-    if (state.voiceEnabled) {
-      await speak(text);
+    director.busy = true;
+    director.lastError = null;
+
+    emit("mindspace:ai-start", {
+      text
+    });
+
+    try {
+      const result = await callVoiceAI(
+        text,
+        options
+      );
+
+      const entry = {
+        id: makeId(),
+        text,
+        reply: result.reply,
+        operations: result.operations,
+        targetId:
+          options.targetId ||
+          director.selectedId ||
+          getSelectedCreation()?.id ||
+          null,
+        createdAt: Date.now(),
+        executionStatus: "pending"
+      };
+
+      director.lastResult = entry;
+
+      director.history.push(entry);
+
+      if (
+        director.history.length >
+        director.maximumHistory
+      ) {
+        director.history.shift();
+      }
+
+      /*
+       * 將真實 AI 指令交給後續視覺執行器。
+       *
+       * 此階段不直接改動 p5.js 角色。
+       * 因為 sketch.js 尚未加入對應的
+       * 翅膀、雷射、變身等繪製功能。
+       */
+
+      if (entry.operations.length > 0) {
+        director.queue.push(entry);
+
+        emit("mindspace:ai-operations", {
+          entry,
+          operations: entry.operations,
+          targetId: entry.targetId
+        });
+      }
+
+      emit("mindspace:ai-complete", {
+        entry
+      });
+
+      return entry;
+
+    } catch (error) {
+      director.lastError =
+        error?.message || String(error);
+
+      emit("mindspace:ai-error", {
+        text,
+        error: director.lastError
+      });
+
+      throw error;
+
+    } finally {
+      director.busy = false;
     }
   }
 
-  /* =======================================================
-     19｜移除 AI 生成物件
+  /*
+   * 08｜待執行指令管理
+   *
+   * 未實際繪製前，不能標記 completed。
+   */
 
-     不刪除孩子原始積木，
-     除非孩子明確使用作品管理刪除。
-  ======================================================= */
+  function getPendingOperations() {
+    return director.queue.map(entry => ({
+      id: entry.id,
+      text: entry.text,
+      targetId: entry.targetId,
+      operations: entry.operations,
+      status: entry.executionStatus
+    }));
+  }
 
-  function removeGeneratedPlusPlusObject(
-    operation,
-    context
-  ) {
-    const id =
-      resolveTargetId(
-        operation,
-        context
-      );
-
-    const object =
-      director.objects.get(
-        id
-      );
-
-    if (!object) {
-      return;
-    }
-
-    getObjectElement(id)
-      ?.remove();
-
-    director.objects.delete(
-      id
+  function markExecuted(entryId) {
+    const index = director.queue.findIndex(
+      entry => entry.id === entryId
     );
 
-    state.generatedObjects =
-      state.generatedObjects.filter(
-        item =>
-          item.id !== id
-      );
+    if (index < 0) return false;
+
+    const entry = director.queue[index];
+
+    entry.executionStatus = "completed";
+
+    director.queue.splice(index, 1);
+
+    emit("mindspace:visual-complete", {
+      entryId
+    });
+
+    return true;
   }
 
-  /* =======================================================
-     20｜公開 Director API
-  ======================================================= */
+  function markFailed(entryId, reason) {
+    const entry = director.queue.find(
+      item => item.id === entryId
+    );
 
-  window.executePlusPlusAIResponse =
-    executePlusPlusAIResponse;
+    if (!entry) return false;
 
-  window.plusPlusDirector = {
-    execute:
-      executePlusPlusAIResponse,
+    entry.executionStatus = "failed";
+    entry.executionError = asText(reason);
 
-    transform:
-      transformPlusPlusCreation,
+    return true;
+  }
 
-    createAccessory:
-      createPlusPlusAccessory,
+  /*
+   * 09｜公開介面
+   *
+   * 給後續 index.html 與 sketch.js 使用。
+   */
 
-    createCharacter:
-      createPlusPlusCharacter,
+  window.MindspaceAIDirector = {
+    version: VERSION,
 
-    createObject:
-      createPlusPlusObject,
+    get busy() {
+      return director.busy;
+    },
 
-    move:
-      movePlusPlusEntity,
+    get lastResult() {
+      return director.lastResult;
+    },
 
-    effect:
-      generatePlusPlusEffect,
+    get lastError() {
+      return director.lastError;
+    },
 
-    modifyEnvironment:
-      modifyPlusPlusEnvironment,
+    get history() {
+      return director.history.slice();
+    },
 
-    getState: () => ({
-      running:
-        director.running,
+    get selectedId() {
+      return director.selectedId;
+    },
 
-      queued:
-        director.queue.length,
-
-      objects:
-        director.objects.size,
-
-      accessories:
-        director.accessories.size
-    })
+    getCreations,
+    getCharacters,
+    getCreationById,
+    getSelectedCreation,
+    selectCreation,
+    getWorldContext,
+    normalizeOperations,
+    interpretSpeech,
+    getPendingOperations,
+    markExecuted,
+    markFailed
   };
 
-  console.log(
-    "🧩 Mindspace Plus-Plus AI Director 已載入"
+  console.info(
+    "[Mindspace]",
+    VERSION,
+    "已載入；等待網站整合語音介面。"
   );
 
 })();
