@@ -2727,7 +2727,7 @@ if (
 ===================================================== */
 
 $("mindspaceCommandSend").onclick = () => {
-  submitMindspaceCommand(
+window.submitMindspaceCommand(
     $("chatInput").value
   );
 };
@@ -2742,7 +2742,7 @@ $("chatInput").addEventListener(
     ) {
       event.preventDefault();
 
-      submitMindspaceCommand(
+      window.submitMindspaceCommand(
         $("chatInput").value
       );
     }
@@ -2925,7 +2925,7 @@ function startCommandVoice() {
       return;
     }
 
-    submitMindspaceCommand(
+    window.submitMindspaceCommand(
       $("chatInput").value
     );
   };
