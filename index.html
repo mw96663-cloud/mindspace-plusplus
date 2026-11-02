@@ -4620,395 +4620,295 @@ stopButton.onclick = stopGuide;
 </script>
 
 
-<script>
-/* =========================================================
-   MINDSPACE｜VOICE TO OPENAI ACCESSORY V3
 
-   修正：
-   1. 取得原始去背積木 PNG
-   2. 傳給 OpenAI 進行視覺定位
-   3. 取得 AI 生成的透明 PNG
-   4. 將 AI 定位資料交給 p5.js
-   5. 外觀不再先執行舊幾何繪製
-   6. 保留其他原本的 AI 指令
-========================================================= */
+<script>
+/* =====================================================
+   MINDSPACE｜VOICE WHOLE TRANSFORMATION V5
+
+   取代 index.html 原本 V3 + V4 配件流程。
+
+   appearance：
+   OpenAI 編輯完整角色 → 更新 item.img
+
+   其他指令：
+   交給原本 sketch.js 執行器。
+
+   不使用：
+   - AI 配件座標
+   - 手動配件拖曳
+   - 多層外觀指令覆蓋
+===================================================== */
 
 (function () {
   "use strict";
 
-  const pendingAccessories = new Set();
+  const previousApply =
+    window.applyMindspaceAIOperations;
 
-  function normalizeAIResponse(response) {
-    if (response?.ok === false) {
-      throw new Error(
-        response.error || "OpenAI 配件生成失敗"
-      );
-    }
-
-    const result = response?.result || response;
-
-    if (
-      !result ||
-      result.success !== true ||
-      result.provider !== "OpenAI" ||
-      typeof result.image !== "string" ||
-      !result.image.startsWith(
-        "data:image/png;base64,"
-      )
-    ) {
-      throw new Error(
-        "OpenAI 沒有回傳有效的透明 PNG"
-      );
-    }
-
-    if (
-      !result.placement ||
-      result.placement.success !== true ||
-      !Array.isArray(result.placement.points)
-    ) {
-      throw new Error(
-        "OpenAI 沒有回傳角色視覺定位資料"
-      );
-    }
-
-    return result;
+  if (typeof previousApply !== "function") {
+    console.error(
+      "[Mindspace V5] 原始 AI 執行器尚未載入"
+    );
+    return;
   }
 
-  function getTargetId(operation) {
+  const busyCharacters = new Set();
+
+  function findTarget(operation) {
     const creations =
       window.mindspaceCreations || [];
 
-    const requested = operation?.targetId;
+    const requestedId =
+      operation.targetId ||
+      window.mindspaceSelectedId;
 
-    if (requested) {
-      const found = creations.find(
-        item => String(item.id) === String(requested)
+    if (requestedId != null) {
+      const selected = creations.find(
+        item =>
+          String(item.id) === String(requestedId)
       );
 
-      if (found) return found.id;
-    }
+      if (selected) {
+        return selected;
+      }
 
-    const selected = window.mindspaceSelectedId;
-
-    if (selected) {
-      const found = creations.find(
-        item => String(item.id) === String(selected)
-      );
-
-      if (found) return found.id;
+      // 明確指定的角色不存在時，
+      // 不要偷偷修改其他角色。
+      if (operation.targetId != null) {
+        return null;
+      }
     }
 
     const characters = creations.filter(
       item => item.kind === "character"
     );
 
-    if (characters.length === 1) {
-      return characters[0].id;
-    }
-
-    return null;
+    return characters.length === 1
+      ? characters[0]
+      : null;
   }
 
-  function getTargetCreation(targetId) {
-    return (
-      window.mindspaceCreations || []
-    ).find(
-      item => String(item.id) === String(targetId)
-    );
-  }
-
-  function getAppearanceDescription(operation) {
+  function getDescription(operation) {
     const parts = [
-      operation?.description,
-      operation?.appearance,
-      operation?.feature,
-      operation?.name,
-      operation?.color
+      operation.description,
+      operation.appearance,
+      operation.feature,
+      operation.color
     ];
 
     return parts
-      .filter(value =>
-        typeof value === "string" &&
-        value.trim()
+      .filter(
+        value =>
+          typeof value === "string" &&
+          value.trim()
       )
       .join("，")
       .trim();
   }
 
-  async function generateAccessory(operation) {
-    if (!operation || typeof operation !== "object") {
-      throw new Error("外觀指令格式錯誤");
-    }
+  async function transformCharacter(operation) {
+    const target = findTarget(operation);
 
-    const targetId = getTargetId(operation);
-
-    if (!targetId) {
+    if (!target) {
       throw new Error(
-        "請先選取要修改的積木角色"
+        "請先選取要變身的積木角色"
       );
     }
 
-    const targetCreation =
-      getTargetCreation(targetId);
-
-    if (!targetCreation) {
-      throw new Error(
-        "找不到原始積木角色"
-      );
-    }
-
-    if (targetCreation.kind !== "character") {
+    if (target.kind !== "character") {
       throw new Error(
         "目前選取的作品不是角色"
       );
     }
 
-    // 直接取得孩子原本的去背積木 PNG。
-    // 不重新生成角色，不改變原始積木。
-    const originalImage =
-      targetCreation.originalPNG;
+    const description =
+      getDescription(operation);
+
+    if (!description) {
+      throw new Error(
+        "缺少角色變身的描述"
+      );
+    }
+
+    const currentImage =
+      target.mindspaceCurrentPNG ||
+      target.originalPNG;
 
     if (
-      typeof originalImage !== "string" ||
-      !originalImage.startsWith(
-        "data:image/png;base64,"
-      )
+      typeof currentImage !== "string" ||
+      !/^data:image\/(png|jpeg|jpg|webp);base64,/i
+        .test(currentImage)
     ) {
       throw new Error(
-        "角色缺少原始去背 PNG，無法進行 AI 定位"
+        "找不到角色目前的去背圖片"
+      );
+    }
+
+    if (
+      typeof window.replaceMindspaceCharacterImage
+        !== "function"
+    ) {
+      throw new Error(
+        "角色圖片替換功能尚未載入"
+      );
+    }
+
+    const targetId = String(target.id);
+
+    if (busyCharacters.has(targetId)) {
+      throw new Error(
+        "角色正在變身，請稍候"
       );
     }
 
     const feature = String(
       operation.feature ||
       operation.appearance ||
-      "accessory"
-    ).trim();
-
-    const description =
-      getAppearanceDescription(operation) ||
-      feature;
+      "transformation"
+    );
 
     const count = Math.max(
       1,
       Math.min(
         30,
-        Math.round(Number(operation.count) || 1)
+        Math.round(
+          Number(operation.count) || 1
+        )
       )
     );
 
-    const color = String(
-      operation.color || ""
-    ).trim();
-
-    const key = [
-      targetId,
-      feature,
-      description,
-      count,
-      color
-    ].join("|");
-
-    if (pendingAccessories.has(key)) {
-      throw new Error(
-        "這個配件正在生成中，請稍候"
-      );
-    }
-
-    pendingAccessories.add(key);
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "mindspace:ai-accessory-loading",
-        {
-          detail: {
-            targetId,
-            feature,
-            description,
-            count
-          }
-        }
-      )
-    );
+    busyCharacters.add(targetId);
 
     try {
+      setCommandStatus(
+        "✨ OpenAI 正在生成完整的變身角色……"
+      );
+
       console.log(
-        "[Mindspace] 開始 AI 視覺定位",
+        "[Mindspace V5] OpenAI 角色變身請求",
         {
           targetId,
-          feature,
           description,
-          count,
-          imageLength: originalImage.length
+          feature,
+          imageLength: currentImage.length
         }
       );
 
-      // 新版後端：
-      // OpenAI 看原始積木照片，決定附著位置，
-      // 並生成真正的 Plus-Plus 配件 PNG。
-      const rawResponse = await requestAI(
+      // 沿用原本已存在的 Bridge 指令名稱。
+      // 後端已改為生成整隻角色 PNG。
+      const result = await requestAI(
         "generatePlusPlusAccessoryPlacedAI",
         {
           targetId,
-          originalImage,
+          currentImage,
+          originalImage: target.originalPNG,
+          identity:
+            target.identity ||
+            target.name ||
+            "Plus-Plus character",
           description,
           accessory: feature,
-          color,
+          color: String(
+            operation.color || ""
+          ),
           count
         },
         240000
       );
 
-      const result =
-        normalizeAIResponse(rawResponse);
-
       if (
-        result.placement.points.length !== count
+        !result ||
+        result.success !== true ||
+        result.provider !== "OpenAI" ||
+        result.transformationMode !==
+          "whole-character" ||
+        typeof result.image !== "string" ||
+        !result.image.startsWith(
+          "data:image/png;base64,"
+        )
       ) {
         throw new Error(
-          "OpenAI 附著點數量不正確：" +
-          "需要 " + count +
-          " 個，實際收到 " +
-          result.placement.points.length + " 個"
+          "OpenAI 未回傳有效的完整變身角色 PNG"
         );
       }
 
-      if (
-        typeof window.addMindspaceAIAccessory !==
-        "function"
-      ) {
-        throw new Error(
-          "sketch.js 尚未載入 AI PNG 配件渲染器"
-        );
-      }
-
-      console.log(
-        "[Mindspace] OpenAI 定位完成",
-        {
+      const replaced =
+        await window.replaceMindspaceCharacterImage({
           targetId,
-          points: result.placement.points,
-          placementModel: result.placementModel,
-          responseId: result.placementResponseId
-        }
-      );
-
-      // 真正等待 PNG 載入並附著完成。
-      const attached =
-        await window.addMindspaceAIAccessory({
-          targetId,
-          feature,
-          description,
-          count,
           image: result.image,
-          model: result.model,
-          placement: result.placement
+          description,
+          feature,
+          model: result.model
         });
 
       if (
-        !attached ||
-        attached.success !== true
+        !replaced ||
+        replaced.success !== true
       ) {
         throw new Error(
-          "AI PNG 沒有成功附著到角色"
+          "完整角色圖片替換失敗"
         );
       }
 
       console.log(
-        "[Mindspace] AI 配件生成並附著成功",
+        "[Mindspace V5] 整體變身成功",
         {
           targetId,
-          feature,
-          count,
-          attached
+          model: result.model,
+          responseId: result.responseId
         }
       );
 
       window.dispatchEvent(
         new CustomEvent(
-          "mindspace:ai-accessory-success",
+          "mindspace:whole-transform-success",
           {
             detail: {
               targetId,
               feature,
-              count,
               model: result.model
             }
           }
         )
       );
 
-      return {
-        success: true,
-        targetId,
-        count,
-        feature
-      };
-
-    } catch (error) {
-      console.error(
-        "[Mindspace] AI 配件生成失敗",
-        error
-      );
-
-      window.dispatchEvent(
-        new CustomEvent(
-          "mindspace:ai-accessory-error",
-          {
-            detail: {
-              targetId,
-              feature,
-              description,
-              message: error.message || String(error)
-            }
-          }
-        )
-      );
-
-      throw error;
+      return replaced;
 
     } finally {
-      pendingAccessories.delete(key);
+      busyCharacters.delete(targetId);
     }
   }
 
-  // 提供其他模組使用。
-  window.generateMindspaceAccessoryAI =
-    generateAccessory;
+  window.generateMindspaceWholeTransformationAI =
+    transformCharacter;
 
-  // 保存原本的 p5.js AI 指令處理器。
-  const previousApply =
-    window.applyMindspaceAIOperations;
-
-  if (typeof previousApply !== "function") {
-    console.error(
-      "[Mindspace] 找不到原始 AI 指令處理器"
-    );
-    return;
-  }
-
+  // 僅在此處接管外觀指令一次。
   window.applyMindspaceAIOperations =
     async function(operations) {
-
       if (!Array.isArray(operations)) {
-        throw new Error(
-          "OpenAI operations 格式不正確"
-        );
+        return {
+          success: false,
+          applied: 0,
+          failed: 1,
+          errors: ["AI 指令格式不正確"]
+        };
       }
 
       const appearances = [];
-      const otherOperations = [];
+      const others = [];
 
-      // 將外觀和其他技能分開處理。
-      // appearance 不再送進舊版幾何繪製器。
       for (const operation of operations) {
-        if (!operation || typeof operation !== "object") {
+        if (
+          !operation ||
+          typeof operation !== "object"
+        ) {
           continue;
         }
 
         if (operation.type === "appearance") {
           appearances.push(operation);
         } else {
-          otherOperations.push(operation);
+          others.push(operation);
         }
       }
 
@@ -5016,70 +4916,79 @@ stopButton.onclick = stopGuide;
       let failed = 0;
       const errors = [];
 
-      // 保留原本其他功能：
-      // 技能、移動、故事、環境、角色互動等。
-      if (otherOperations.length > 0) {
-        try {
-          const originalResult =
-            await Promise.resolve(
-              previousApply(otherOperations)
-            );
-
-          if (originalResult === false) {
-            throw new Error(
-              "原始 AI 指令執行器回傳失敗"
-            );
-          }
-
-          if (
-            originalResult &&
-            typeof originalResult === "object"
-          ) {
-            applied += Number(
-              originalResult.applied || 0
-            );
-
-            failed += Number(
-              originalResult.failed || 0
-            );
-
-            if (
-              originalResult.success === false &&
-              !originalResult.failed
-            ) {
-              failed++;
-            }
-          } else {
-            applied += otherOperations.length;
-          }
-
-        } catch (error) {
-          failed += otherOperations.length;
-          errors.push(
-            error.message || String(error)
-          );
-
-          console.error(
-            "[Mindspace] 原始技能執行失敗",
-            error
-          );
-        }
-      }
-
-      // 外觀改由真正的 OpenAI PNG 處理。
+      // 外觀變身由 OpenAI 圖片編輯處理。
       for (const operation of appearances) {
         try {
-          await generateAccessory(operation);
+          await transformCharacter(operation);
           applied++;
 
         } catch (error) {
           failed++;
+
           errors.push(
             error.message || String(error)
           );
 
           console.error(
-            "[Mindspace] 外觀配件未完成",
+            "[Mindspace V5] 外觀變身失敗",
+            error
+          );
+        }
+      }
+
+      // 其他功能完全交回原本執行器。
+      if (others.length > 0) {
+        try {
+          const result =
+            await Promise.resolve(
+              previousApply(others)
+            );
+
+          if (result === false) {
+            failed += others.length;
+
+            errors.push(
+              "原本的 AI 指令執行失敗"
+            );
+
+          } else if (
+            result &&
+            typeof result === "object"
+          ) {
+            applied += Number(
+              result.applied || 0
+            );
+
+            failed += Number(
+              result.failed || 0
+            );
+
+            if (
+              Array.isArray(result.errors)
+            ) {
+              errors.push(...result.errors);
+            }
+
+            if (
+              result.success === false &&
+              !result.failed
+            ) {
+              failed++;
+            }
+
+          } else {
+            applied += others.length;
+          }
+
+        } catch (error) {
+          failed += others.length;
+
+          errors.push(
+            error.message || String(error)
+          );
+
+          console.error(
+            "[Mindspace V5] 原有指令失敗",
             error
           );
         }
@@ -5094,575 +5003,11 @@ stopButton.onclick = stopGuide;
     };
 
   console.log(
-    "[Mindspace] Voice → OpenAI Visual Placement V3 已啟動"
+    "[Mindspace] 整體圖片變身 V5 已啟動"
   );
 })();
 </script>
 
-<script>
-/* =====================================================
-   MINDSPACE｜CHILD MANUAL ACCESSORY EDITOR V4
-===================================================== */
-
-(function () {
-  "use strict";
-
-  const oldApply =
-    window.applyMindspaceAIOperations;
-
-  let editorBusy = false;
-
-  const style = document.createElement("style");
-  style.textContent = `
-    #manualAccessoryEditor {
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      display: none;
-      background: rgba(10,25,45,.88);
-      align-items: center;
-      justify-content: center;
-      padding: 12px;
-    }
-
-    #manualAccessoryEditor.active {
-      display: flex;
-    }
-
-    #manualAccessoryPanel {
-      width: min(720px,100%);
-      max-height: 96vh;
-      overflow: auto;
-      padding: 18px;
-      border-radius: 20px;
-      background: white;
-      color: #25374e;
-    }
-
-    #manualAccessoryStage {
-      position: relative;
-      width: 100%;
-      height: min(48vh,420px);
-      overflow: hidden;
-      border-radius: 15px;
-      background:
-        linear-gradient(45deg,#e7edf4 25%,transparent 25%),
-        linear-gradient(-45deg,#e7edf4 25%,transparent 25%),
-        #f8fbff;
-      background-size: 24px 24px;
-      touch-action: none;
-    }
-
-    #manualAccessoryCharacter {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%,-50%);
-      max-width: 48%;
-      max-height: 65%;
-      object-fit: contain;
-      pointer-events: none;
-    }
-
-    .manualAccessoryPart {
-      position: absolute;
-      width: 100px;
-      height: 100px;
-      object-fit: contain;
-      touch-action: none;
-      cursor: grab;
-      user-select: none;
-      transform-origin: center;
-    }
-
-    .manualAccessoryPart.selected {
-      outline: 2px dashed #3974c5;
-      outline-offset: 5px;
-    }
-
-    #manualAccessoryPanel input[type=range] {
-      width: 100%;
-    }
-
-    #manualAccessoryPanel button {
-      padding: 11px 14px;
-      margin: 5px 3px;
-      border-radius: 10px;
-      background: #e4effb;
-      color: #25374e;
-    }
-
-    #manualAccessoryPanel .confirm {
-      background: #ffcf5d;
-      font-weight: bold;
-    }
-  `;
-  document.head.appendChild(style);
-
-  const root = document.createElement("div");
-  root.id = "manualAccessoryEditor";
-
-  root.innerHTML = `
-    <div id="manualAccessoryPanel">
-      <h2>✨ 自己決定造型長在哪裡</h2>
-      <p id="manualAccessoryMessage">
-        拖曳配件到角色身上。
-      </p>
-
-      <div id="manualAccessoryStage">
-        <img id="manualAccessoryCharacter"
-             alt="原始積木角色">
-      </div>
-
-      <p>點選要調整的配件，再修改大小和角度。</p>
-
-      <label>
-        配件大小
-        <input id="manualAccessoryScale"
-               type="range"
-               min="20"
-               max="200"
-               value="75">
-      </label>
-
-      <label>
-        旋轉角度
-        <input id="manualAccessoryAngle"
-               type="range"
-               min="-180"
-               max="180"
-               value="0">
-      </label>
-
-      <div>
-        <button id="manualAccessoryReset">
-          重設位置
-        </button>
-        <button id="manualAccessoryCancel">
-          取消
-        </button>
-        <button id="manualAccessoryConfirm"
-                class="confirm">
-          ✓ 確認附著
-        </button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(root);
-
-  const stage = document.getElementById(
-    "manualAccessoryStage"
-  );
-
-  const characterImg = document.getElementById(
-    "manualAccessoryCharacter"
-  );
-
-  const scaleInput = document.getElementById(
-    "manualAccessoryScale"
-  );
-
-  const angleInput = document.getElementById(
-    "manualAccessoryAngle"
-  );
-
-  const message = document.getElementById(
-    "manualAccessoryMessage"
-  );
-
-  let activeParts = [];
-  let selectedIndex = 0;
-  let finishEditor = null;
-
-  function renderParts() {
-    stage.querySelectorAll(
-      ".manualAccessoryPart"
-    ).forEach(el => el.remove());
-
-    activeParts.forEach((part, index) => {
-      const img = document.createElement("img");
-
-      img.src = part.image;
-      img.className =
-        "manualAccessoryPart" +
-        (index === selectedIndex ? " selected" : "");
-
-      img.draggable = false;
-
-      const update = () => {
-        img.style.left = part.x + "px";
-        img.style.top = part.y + "px";
-
-        img.style.width =
-          part.scale + "px";
-
-        img.style.height =
-          part.scale * part.ratio + "px";
-
-        img.style.transform =
-          "translate(-50%,-50%) rotate(" +
-          part.angle + "deg)";
-      };
-
-      img.addEventListener(
-        "pointerdown",
-        event => {
-          event.preventDefault();
-          event.stopPropagation();
-
-          selectedIndex = index;
-
-          scaleInput.value = part.scale;
-          angleInput.value = part.angle;
-
-          img.setPointerCapture(event.pointerId);
-
-          const rect =
-            stage.getBoundingClientRect();
-
-          const move = e => {
-            part.x = Math.max(
-              0,
-              Math.min(rect.width, e.clientX - rect.left)
-            );
-
-            part.y = Math.max(
-              0,
-              Math.min(rect.height, e.clientY - rect.top)
-            );
-
-            update();
-          };
-
-          move(event);
-
-          img.addEventListener(
-            "pointermove",
-            move
-          );
-
-          img.addEventListener(
-            "pointerup",
-            () => {
-              img.removeEventListener(
-                "pointermove",
-                move
-              );
-              renderParts();
-            },
-            {once: true}
-          );
-
-          renderSelection();
-        }
-      );
-
-      stage.appendChild(img);
-      update();
-    });
-  }
-
-  function renderSelection() {
-    stage.querySelectorAll(
-      ".manualAccessoryPart"
-    ).forEach((el, i) => {
-      el.classList.toggle(
-        "selected",
-        i === selectedIndex
-      );
-    });
-  }
-
-  scaleInput.addEventListener("input", () => {
-    const part = activeParts[selectedIndex];
-    if (!part) return;
-
-    part.scale = Number(scaleInput.value);
-    renderParts();
-  });
-
-  angleInput.addEventListener("input", () => {
-    const part = activeParts[selectedIndex];
-    if (!part) return;
-
-    part.angle = Number(angleInput.value);
-    renderParts();
-  });
-
-  function closeEditor(result) {
-    root.classList.remove("active");
-
-    const done = finishEditor;
-    finishEditor = null;
-
-    if (done) done(result);
-  }
-
-  document.getElementById(
-    "manualAccessoryCancel"
-  ).onclick = () => closeEditor(null);
-
-  document.getElementById(
-    "manualAccessoryReset"
-  ).onclick = () => {
-    const rect = stage.getBoundingClientRect();
-
-    activeParts.forEach((part, index) => {
-      part.x = rect.width / 2 +
-        (index % 3 - 1) * 60;
-
-      part.y = rect.height / 2 -
-        80 + Math.floor(index / 3) * 40;
-
-      part.scale = 75;
-      part.angle = 0;
-    });
-
-    selectedIndex = 0;
-    scaleInput.value = 75;
-    angleInput.value = 0;
-    renderParts();
-  };
-
-  document.getElementById(
-    "manualAccessoryConfirm"
-  ).onclick = () => {
-    const rect = stage.getBoundingClientRect();
-    const target = characterImg.getBoundingClientRect();
-
-    if (!target.width || !target.height) {
-      message.textContent = "角色圖片尚未載入。";
-      return;
-    }
-
-    const centerX =
-      target.left - rect.left + target.width / 2;
-
-    const centerY =
-      target.top - rect.top + target.height / 2;
-
-    const parts = activeParts.map(part => ({
-      x: (part.x - centerX) / target.width,
-      y: (part.y - centerY) / target.height,
-      scale: part.scale / target.width,
-      angle: part.angle * Math.PI / 180
-    }));
-
-    closeEditor(parts);
-  };
-
-  function openAccessoryEditor(
-    target,
-    image,
-    count
-  ) {
-    return new Promise(async resolve => {
-      const preview = new Image();
-      preview.src = image;
-
-      try {
-        await preview.decode();
-      } catch {
-        resolve(null);
-        return;
-      }
-
-      characterImg.src = target.originalPNG;
-
-      try {
-        await characterImg.decode();
-      } catch {
-        resolve(null);
-        return;
-      }
-
-      root.classList.add("active");
-      finishEditor = resolve;
-
-      const rect = stage.getBoundingClientRect();
-
-      const ratio =
-        preview.naturalHeight /
-        Math.max(1, preview.naturalWidth);
-
-      activeParts = Array.from(
-        {length: count},
-        (_, index) => ({
-          image,
-          ratio,
-          x: rect.width / 2 +
-            (index % 3 - 1) * 60,
-          y: rect.height / 2 -
-            80 + Math.floor(index / 3) * 40,
-          scale: 75,
-          angle: 0
-        })
-      );
-
-      selectedIndex = 0;
-      scaleInput.value = 75;
-      angleInput.value = 0;
-
-      message.textContent =
-        "共有 " + count +
-        " 個配件，請逐一拖曳到你想要的位置。";
-
-      renderParts();
-    });
-  }
-
-  async function generateManualAccessory(operation) {
-    const all = window.mindspaceCreations || [];
-
-    const id =
-      operation.targetId ||
-      window.mindspaceSelectedId;
-
-    const target = all.find(
-      item => String(item.id) === String(id)
-    );
-
-    if (!target || target.kind !== "character") {
-      throw new Error("請先選取一個積木角色");
-    }
-
-    const count = Math.max(
-      1,
-      Math.min(
-        30,
-        Math.round(Number(operation.count) || 1)
-      )
-    );
-
-    const feature = String(
-      operation.feature || "accessory"
-    );
-
-    const description = String(
-      operation.description ||
-      operation.appearance ||
-      feature
-    );
-
-    const response = await requestAI(
-      "generatePlusPlusAccessoryPlacedAI",
-      {
-        targetId: target.id,
-        description,
-        accessory: feature,
-        color: operation.color || "colorful",
-        count
-      },
-      240000
-    );
-
-    if (
-      !response ||
-      response.success !== true ||
-      response.provider !== "OpenAI" ||
-      typeof response.image !== "string" ||
-      !response.image.startsWith(
-        "data:image/png;base64,"
-      )
-    ) {
-      throw new Error(
-        "OpenAI 沒有回傳真正的配件 PNG"
-      );
-    }
-
-    const parts = await openAccessoryEditor(
-      target,
-      response.image,
-      count
-    );
-
-    if (!parts) {
-      throw new Error("孩子已取消配件放置");
-    }
-
-    return window.attachMindspaceManualAccessory({
-      targetId: target.id,
-      image: response.image,
-      feature,
-      parts
-    });
-  }
-
-  window.applyMindspaceAIOperations =
-    async function(operations) {
-
-      if (editorBusy) {
-        return {
-          success: false,
-          applied: 0,
-          failed: 1,
-          errors: ["配件工作台正在使用中"]
-        };
-      }
-
-      const appearances = operations.filter(
-        op => op && op.type === "appearance"
-      );
-
-      if (!appearances.length) {
-        return oldApply(operations);
-      }
-
-      const others = operations.filter(
-        op => op && op.type !== "appearance"
-      );
-
-      let applied = 0;
-      let failed = 0;
-      const errors = [];
-
-      editorBusy = true;
-
-      try {
-        for (const op of appearances) {
-          try {
-            await generateManualAccessory(op);
-            applied++;
-          } catch (error) {
-            failed++;
-            errors.push(error.message);
-          }
-        }
-
-        if (others.length) {
-          const result = await oldApply(others);
-
-          applied += Number(
-            result?.applied || 0
-          );
-
-          failed += Number(
-            result?.failed || 0
-          );
-
-          if (Array.isArray(result?.errors)) {
-            errors.push(...result.errors);
-          }
-        }
-
-      } finally {
-        editorBusy = false;
-      }
-
-      return {
-        success: failed === 0,
-        applied,
-        failed,
-        errors
-      };
-    };
-
-  console.log(
-    "[Mindspace] 兒童自由放置配件 V4 已啟動"
-  );
-})();
-</script>
 
 </body>
 </html>
