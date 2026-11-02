@@ -5009,5 +5009,140 @@ stopButton.onclick = stopGuide;
 </script>
 
 
+<script>
+/* =========================================
+   MINDSPACE｜SIMPLE SOUND EFFECTS V1
+   不需要音效檔、不需要 OpenAI
+========================================= */
+
+(function () {
+  "use strict";
+
+  let audioContext = null;
+
+  function getAudioContext() {
+    const AudioContextClass =
+      window.AudioContext ||
+      window.webkitAudioContext;
+
+    if (!AudioContextClass) return null;
+
+    if (!audioContext) {
+      audioContext = new AudioContextClass();
+    }
+
+    if (audioContext.state === "suspended") {
+      audioContext.resume().catch(console.warn);
+    }
+
+    return audioContext;
+  }
+
+  function playTone(
+    frequency,
+    duration = 0.15,
+    delay = 0,
+    type = "sine",
+    volume = 0.07
+  ) {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    const start = ctx.currentTime + delay;
+    const end = start + duration;
+
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(
+      frequency,
+      start
+    );
+
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(
+      volume,
+      start + 0.015
+    );
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      end
+    );
+
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+
+    oscillator.start(start);
+    oscillator.stop(end + 0.01);
+  }
+
+  const sounds = {
+
+    // 拍照成功
+    camera() {
+      playTone(650, 0.07, 0, "triangle", 0.06);
+      playTone(980, 0.12, 0.08, "sine", 0.05);
+    },
+
+    // 角色進入世界
+    appear() {
+      playTone(420, 0.12, 0, "sine", 0.06);
+      playTone(700, 0.16, 0.09, "sine", 0.06);
+    },
+
+    // AI 角色變身成功
+    transform() {
+      playTone(523, 0.16, 0, "sine", 0.07);
+      playTone(659, 0.16, 0.12, "sine", 0.07);
+      playTone(784, 0.20, 0.24, "sine", 0.07);
+      playTone(1047, 0.38, 0.38, "sine", 0.06);
+    },
+
+    // 環境生成成功
+    environment() {
+      playTone(392, 0.25, 0, "sine", 0.04);
+      playTone(587, 0.28, 0.15, "sine", 0.05);
+      playTone(880, 0.40, 0.30, "sine", 0.04);
+    },
+
+    // 操作失敗
+    error() {
+      playTone(350, 0.14, 0, "triangle", 0.04);
+      playTone(280, 0.20, 0.15, "triangle", 0.04);
+    }
+  };
+
+  window.mindspaceSounds = sounds;
+
+  // 連接新版整體圖片變身成功事件。
+  window.addEventListener(
+    "mindspace:whole-transform-success",
+    () => sounds.transform()
+  );
+
+  // 第一次觸碰或點擊時解鎖音效。
+  function unlockAudio() {
+    getAudioContext();
+  }
+
+  document.addEventListener(
+    "pointerdown",
+    unlockAudio,
+    { once: true }
+  );
+
+  document.addEventListener(
+    "keydown",
+    unlockAudio,
+    { once: true }
+  );
+
+  console.log(
+    "[Mindspace] 簡單音效系統已啟動"
+  );
+})();
+</script>
+
 </body>
 </html>
