@@ -5139,7 +5139,343 @@ case "appearance": {
     }
   };
 
+/* =====================================================
+   MINDSPACE｜WHOLE CHARACTER SPRITE V5
+
+   功能：
+   - 保留 originalPNG
+   - 使用新 PNG 替換 item.img
+   - 保留角色 ID、位置、能力、移動方式
+   - 保留環境與其他角色
+   - 避免舊配件重複顯示
+===================================================== */
+
+(function () {
+  "use strict";
+
+  function findCharacter(id) {
+    return creations.find(
+      item =>
+        String(item.id) === String(id) &&
+        item.kind === "character"
+    );
+  }
+
+  function loadTransformationPNG(dataURL) {
+    return new Promise((resolve, reject) => {
+      if (
+        typeof dataURL !== "string" ||
+        !dataURL.startsWith(
+          "data:image/png;base64,"
+        )
+      ) {
+        reject(
+          new Error("變身圖片不是有效的 PNG 資料")
+        );
+        return;
+      }
+
+      loadImage(
+        dataURL,
+        imageObject => {
+          if (
+            !imageObject ||
+            !imageObject.width ||
+            !imageObject.height
+          ) {
+            reject(
+              new Error("變身圖片尺寸無效")
+            );
+            return;
+          }
+
+          resolve(imageObject);
+        },
+        () => reject(
+          new Error("p5.js 無法載入變身圖片")
+        )
+      );
+    });
+  }
+
+  window.replaceMindspaceCharacterImage =
+    async function(data) {
+      data = data || {};
+
+      const item = findCharacter(data.targetId);
+
+      if (!item) {
+        throw new Error(
+          "找不到要進行整體變身的角色"
+        );
+      }
+
+      const newImage =
+        await loadTransformationPNG(data.image);
+
+      // 第一次變身時記錄原本尺寸。
+      if (!item.mindspaceOriginalSpriteSize) {
+        item.mindspaceOriginalSpriteSize = {
+          w: item.w,
+          h: item.h
+        };
+      }
+
+      const originalSize =
+        item.mindspaceOriginalSpriteSize;
+
+      // 保留目前的角色中心與活動屬性。
+      const oldX = item.x;
+      const oldY = item.y;
+      const oldBaseY = item.baseY;
+
+      // 新增翅膀等部位後，允許圖片變大，
+      // 但限制最大顯示尺寸。
+      const maxWidth = Math.max(
+        80,
+        originalSize.w * 1.6
+      );
+
+      const maxHeight = Math.max(
+        80,
+        originalSize.h * 1.6
+      );
+
+      const scale = Math.min(
+        maxWidth / newImage.width,
+        maxHeight / newImage.height
+      );
+
+      const newW = newImage.width * scale;
+      const newH = newImage.height * scale;
+
+      // 不修改 item.originalPNG。
+      // 保留上一張成功變身圖片，供連續變身。
+      const previousPNG =
+        item.mindspaceCurrentPNG ||
+        item.originalPNG;
+
+      // 新圖片成功載入後才正式替換。
+      item.img = newImage;
+      item.mindspaceCurrentPNG = data.image;
+
+      item.w = newW;
+      item.h = newH;
+
+      item.x = oldX;
+      item.y = oldY;
+      item.baseY = oldBaseY;
+
+      // 新圖片已包含完整角色與新增部位。
+      // 避免以前的 V3/V4 配件又疊在上面。
+      item.manualAIAccessories = [];
+      item.mindspaceAIAccessories = [];
+
+      item.mindspacePreviousPNG = previousPNG;
+
+      item.mindspaceLastTransformation = {
+        description: String(
+          data.description || ""
+        ),
+        feature: String(
+          data.feature || ""
+        ),
+        model: String(
+          data.model || ""
+        ),
+        timestamp: Date.now()
+      };
+
+      console.log(
+        "[Mindspace] 整體角色圖片替換成功",
+        {
+          id: item.id,
+          model: data.model,
+          originalPreserved:
+            Boolean(item.originalPNG),
+          newWidth: item.w,
+          newHeight: item.h
+        }
+      );
+
+      return {
+        success: true,
+        targetId: item.id,
+        originalPreserved:
+          Boolean(item.originalPNG)
+      };
+    };
+})();
+
   console.log(
     "[Mindspace] 手動配件與環境隱藏 V4 已載入"
   );
+})();
+
+/* =====================================================
+   MINDSPACE｜WHOLE CHARACTER SPRITE V5
+
+   功能：
+   - 保留 originalPNG
+   - 使用新 PNG 替換 item.img
+   - 保留角色 ID、位置、能力、移動方式
+   - 保留環境與其他角色
+   - 避免舊配件重複顯示
+===================================================== */
+
+(function () {
+  "use strict";
+
+  function findCharacter(id) {
+    return creations.find(
+      item =>
+        String(item.id) === String(id) &&
+        item.kind === "character"
+    );
+  }
+
+  function loadTransformationPNG(dataURL) {
+    return new Promise((resolve, reject) => {
+      if (
+        typeof dataURL !== "string" ||
+        !dataURL.startsWith(
+          "data:image/png;base64,"
+        )
+      ) {
+        reject(
+          new Error("變身圖片不是有效的 PNG 資料")
+        );
+        return;
+      }
+
+      loadImage(
+        dataURL,
+        imageObject => {
+          if (
+            !imageObject ||
+            !imageObject.width ||
+            !imageObject.height
+          ) {
+            reject(
+              new Error("變身圖片尺寸無效")
+            );
+            return;
+          }
+
+          resolve(imageObject);
+        },
+        () => reject(
+          new Error("p5.js 無法載入變身圖片")
+        )
+      );
+    });
+  }
+
+  window.replaceMindspaceCharacterImage =
+    async function(data) {
+      data = data || {};
+
+      const item = findCharacter(data.targetId);
+
+      if (!item) {
+        throw new Error(
+          "找不到要進行整體變身的角色"
+        );
+      }
+
+      const newImage =
+        await loadTransformationPNG(data.image);
+
+      // 第一次變身時記錄原本尺寸。
+      if (!item.mindspaceOriginalSpriteSize) {
+        item.mindspaceOriginalSpriteSize = {
+          w: item.w,
+          h: item.h
+        };
+      }
+
+      const originalSize =
+        item.mindspaceOriginalSpriteSize;
+
+      // 保留目前的角色中心與活動屬性。
+      const oldX = item.x;
+      const oldY = item.y;
+      const oldBaseY = item.baseY;
+
+      // 新增翅膀等部位後，允許圖片變大，
+      // 但限制最大顯示尺寸。
+      const maxWidth = Math.max(
+        80,
+        originalSize.w * 1.6
+      );
+
+      const maxHeight = Math.max(
+        80,
+        originalSize.h * 1.6
+      );
+
+      const scale = Math.min(
+        maxWidth / newImage.width,
+        maxHeight / newImage.height
+      );
+
+      const newW = newImage.width * scale;
+      const newH = newImage.height * scale;
+
+      // 不修改 item.originalPNG。
+      // 保留上一張成功變身圖片，供連續變身。
+      const previousPNG =
+        item.mindspaceCurrentPNG ||
+        item.originalPNG;
+
+      // 新圖片成功載入後才正式替換。
+      item.img = newImage;
+      item.mindspaceCurrentPNG = data.image;
+
+      item.w = newW;
+      item.h = newH;
+
+      item.x = oldX;
+      item.y = oldY;
+      item.baseY = oldBaseY;
+
+      // 新圖片已包含完整角色與新增部位。
+      // 避免以前的 V3/V4 配件又疊在上面。
+      item.manualAIAccessories = [];
+      item.mindspaceAIAccessories = [];
+
+      item.mindspacePreviousPNG = previousPNG;
+
+      item.mindspaceLastTransformation = {
+        description: String(
+          data.description || ""
+        ),
+        feature: String(
+          data.feature || ""
+        ),
+        model: String(
+          data.model || ""
+        ),
+        timestamp: Date.now()
+      };
+
+      console.log(
+        "[Mindspace] 整體角色圖片替換成功",
+        {
+          id: item.id,
+          model: data.model,
+          originalPreserved:
+            Boolean(item.originalPNG),
+          newWidth: item.w,
+          newHeight: item.h
+        }
+      );
+
+      return {
+        success: true,
+        targetId: item.id,
+        originalPreserved:
+          Boolean(item.originalPNG)
+      };
+    };
 })();
