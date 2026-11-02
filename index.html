@@ -5144,5 +5144,344 @@ stopButton.onclick = stopGuide;
 })();
 </script>
 
+<script>
+/* =====================================================
+   MINDSPACE｜COMPANION VOICE V1
+
+   保留：
+   - 原本 AI 語音引導
+   - 原本語音辨識
+   - 原本創作指令
+   - 原本 AI 角色變身
+   - 原本 AI 環境生成
+
+   新增：
+   - 自然聊天
+   - OpenAI 意圖分流
+   - 本次聊天記憶
+   - 聊天語音回答
+===================================================== */
+
+(function () {
+  "use strict";
+
+  const originalSubmit =
+    window.submitMindspaceCommand;
+
+  if (typeof originalSubmit !== "function") {
+    console.error(
+      "[Mindspace Companion] 找不到原本的指令函式"
+    );
+    return;
+  }
+
+  const state = {
+    busy: false,
+    history: [],
+    speaking: false,
+    enabled: true
+  };
+
+  function remember(role, content) {
+    state.history.push({
+      role,
+      content: String(content).slice(0, 400)
+    });
+
+    state.history = state.history.slice(-12);
+  }
+
+  function getContext() {
+    if (
+      typeof getMindspaceContext === "function"
+    ) {
+      return getMindspaceContext();
+    }
+
+    return {
+      creations: window.mindspaceCreations || [],
+      worlds: window.mindspaceWorldZones || []
+    };
+  }
+
+  function getTargetId() {
+    if (
+      typeof getSelectedMindspaceItem ===
+      "function"
+    ) {
+      return getSelectedMindspaceItem()?.id || null;
+    }
+
+    return window.mindspaceSelectedId || null;
+  }
+
+  function showReply(text, kind = "") {
+    if (
+      typeof setCommandStatus === "function"
+    ) {
+      setCommandStatus(text, kind);
+    }
+
+    // 沿用原本的文字回饋函式
+    if (typeof say === "function") {
+      say(text);
+    }
+  }
+
+  function speakReply(text) {
+    return new Promise(resolve => {
+      if (
+        !text ||
+        !("speechSynthesis" in window)
+      ) {
+        resolve();
+        return;
+      }
+
+      const synth = window.speechSynthesis;
+
+      // 先結束上一段語音，避免聲音重疊
+      synth.cancel();
+
+      const utterance =
+        new SpeechSynthesisUtterance(text);
+
+      utterance.lang = "zh-TW";
+      utterance.rate = 0.82;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      const voices = synth.getVoices();
+
+      const voice = voices.find(
+        item => item.lang.toLowerCase() === "zh-tw"
+      );
+
+      if (voice) {
+        utterance.voice = voice;
+      }
+
+      let finished = false;
+
+      function finish() {
+        if (finished) return;
+        finished = true;
+        state.speaking = false;
+        resolve();
+      }
+
+      utterance.onend = finish;
+      utterance.onerror = finish;
+
+      state.speaking = true;
+
+      try {
+        synth.speak(utterance);
+      } catch (error) {
+        console.warn(
+          "[Mindspace Companion] 語音播放失敗",
+          error
+        );
+        finish();
+      }
+    });
+  }
+
+  async function companionSubmit(inputText) {
+    const text = String(inputText || "").trim();
+
+    if (!state.enabled) {
+      return originalSubmit(text);
+    }
+
+    if (!text) {
+      return originalSubmit(text);
+    }
+
+    if (state.busy) {
+      showReply(
+        "正在理解上一句話，請稍候。"
+      );
+      return;
+    }
+
+    if (
+      typeof bridgeReady !== "undefined" &&
+      !bridgeReady
+    ) {
+      return originalSubmit(text);
+    }
+
+    state.busy = true;
+
+    // 使用原本的指令狀態通知機制，
+    // 讓主動語音引導知道目前正在互動。
+    if (
+      typeof beginMindspaceCommand === "function"
+    ) {
+      beginMindspaceCommand();
+    }
+
+    if (
+      typeof setCommandBusy === "function"
+    ) {
+      setCommandBusy(true);
+    }
+
+    let result;
+
+    try {
+      showReply("正在理解你說的話……");
+
+      result = await requestAI(
+        "mindspaceCompanionAI",
+        {
+          text,
+          history: state.history,
+          context: getContext(),
+          targetId: getTargetId()
+        },
+        120000
+      );
+
+      if (
+        !result ||
+        result.success !== true ||
+        result.provider !== "OpenAI" ||
+        !result.responseId
+      ) {
+        throw new Error(
+          "OpenAI 沒有回傳可驗證的結果"
+        );
+      }
+
+      console.log(
+        "[Mindspace Companion] AI 判斷",
+        {
+          mode: result.mode,
+          model: result.model,
+          responseId: result.responseId
+        }
+      );
+
+      if (result.mode === "chat") {
+        const reply = String(
+          result.reply || ""
+        ).trim();
+
+        if (!reply) {
+          throw new Error("AI 沒有回答");
+        }
+
+        remember("user", text);
+        remember("assistant", reply);
+
+        showReply(reply, "success");
+
+        const chatInput =
+          document.getElementById("chatInput");
+
+        if (chatInput) {
+          chatInput.value = "";
+        }
+
+        await speakReply(reply);
+
+        return {
+          success: true,
+          mode: "chat",
+          reply
+        };
+      }
+
+      if (result.mode !== "command") {
+        throw new Error(
+          "AI 回傳未知的指令類型"
+        );
+      }
+
+    } catch (error) {
+      console.error(
+        "[Mindspace Companion] 錯誤",
+        error
+      );
+
+      showReply(
+        "AI 對話沒有完成：" +
+        (error?.message || String(error)),
+        "error"
+      );
+
+      return {
+        success: false,
+        error: String(error?.message || error)
+      };
+
+    } finally {
+      state.busy = false;
+
+      if (
+        typeof setCommandBusy === "function"
+      ) {
+        setCommandBusy(false);
+      }
+
+      if (
+        typeof finishMindspaceCommand ===
+        "function"
+      ) {
+        finishMindspaceCommand();
+      }
+    }
+
+    // 這句話是創作指令。
+    // 完整交還給原本的 AI 語音指令系統。
+    // 不重新實作，也不改掉原本的功能。
+    return originalSubmit(text);
+  }
+
+  // 保留原函式，外層只新增 AI 判斷。
+  window.submitMindspaceCommand =
+    companionSubmit;
+
+  // 可在 Console 測試及清除聊天記憶
+  window.mindspaceCompanion = {
+    getHistory() {
+      return state.history.map(
+        item => ({ ...item })
+      );
+    },
+
+    clearHistory() {
+      state.history = [];
+      console.log(
+        "[Mindspace Companion] 聊天記憶已清除"
+      );
+    },
+
+    enable() {
+      state.enabled = true;
+    },
+
+    disable() {
+      state.enabled = false;
+    },
+
+    getStatus() {
+      return {
+        enabled: state.enabled,
+        busy: state.busy,
+        speaking: state.speaking,
+        historyLength: state.history.length
+      };
+    }
+  };
+
+  console.log(
+    "[Mindspace Companion] AI 陪伴對話已載入"
+  );
+})();
+</script>
+
 </body>
 </html>
