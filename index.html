@@ -637,12 +637,19 @@ section h2 {
       準備進行 AI 去背。
     </p>
 
-    <button
-      id="removeBgAI"
-      class="action primary"
-    >
-      開始 AI 去背
-    </button>
+   <button
+  id="removeBgFast"
+  class="action primary"
+>
+  ⚡ 快速去背（免等待 AI）
+</button>
+
+<button
+  id="removeBgAI"
+  class="action"
+>
+  ✨ OpenAI 精細去背
+</button>
 
     <div id="editTools" class="hidden">
 
@@ -1364,6 +1371,12 @@ $("photoFile").onchange = async event => {
    06｜AI 去背編輯器
 ===================================================== */
 
+
+/* =====================================================
+   06｜快速去背 + OpenAI 精細去背
+   保留原始照片、手動修圖與 AI 備援
+===================================================== */
+
 async function showEditor() {
   editReady = false;
   originalCutout = null;
@@ -1372,20 +1385,26 @@ async function showEditor() {
   editHistoryIndex = -1;
 
   $("editTools").classList.add("hidden");
+
+  $("removeBgFast").classList.remove("hidden");
   $("removeBgAI").classList.remove("hidden");
 
-  $("editorMessage").textContent =
-    "請先執行 AI 去背。";
+  $("removeBgFast").disabled = false;
+  $("removeBgAI").disabled = false;
 
-  const image =
-    await loadImageElement(currentPhoto);
+  $("editorMessage").style.whiteSpace = "pre-line";
+  $("editorMessage").textContent =
+    "請選擇去背方式。\n" +
+    "⚡ 快速去背：適合乾淨、單色背景。\n" +
+    "✨ OpenAI：適合複雜背景。";
+
+  const image = await loadImageElement(currentPhoto);
 
   editCanvas.width = image.naturalWidth;
   editCanvas.height = image.naturalHeight;
 
   editCtx.clearRect(
-    0,
-    0,
+    0, 0,
     editCanvas.width,
     editCanvas.height
   );
@@ -1402,20 +1421,314 @@ async function showEditor() {
 }
 
 
-$("removeBgAI").onclick = async () => {
-  if (processing || !currentPhoto) {
-    return;
+/* 將去背結果交給原本的修圖系統 */
+
+function applyCutoutCanvas(sourceCanvas) {
+  if (
+    !sourceCanvas ||
+    !sourceCanvas.width ||
+    !sourceCanvas.height
+  ) {
+    throw new Error("去背結果無效");
   }
+
+  const snapshot = document.createElement("canvas");
+
+  snapshot.width = sourceCanvas.width;
+  snapshot.height = sourceCanvas.height;
+
+  snapshot.getContext("2d").drawImage(
+    sourceCanvas, 0, 0
+  );
+
+  originalCutout = snapshot;
+
+  editCanvas.width = snapshot.width;
+  editCanvas.height = snapshot.height;
+
+  editCtx.clearRect(
+    0, 0,
+    editCanvas.width,
+    editCanvas.height
+  );
+
+  editCtx.drawImage(snapshot, 0, 0);
+
+  editReady = true;
+  editMode = "erase";
+
+  setActiveTool();
+
+  editHistory = [];
+  editHistoryIndex = -1;
+
+  saveHistory();
+
+  $("editTools").classList.remove("hidden");
+}
+
+
+/* =====================================================
+   快速去背：從邊緣辨識連通背景
+   不呼叫 OpenAI，不傳送照片
+===================================================== */
+
+function fastRemoveBackground(sourceImage) {
+  const canvas = document.createElement("canvas");
+
+  canvas.width = sourceImage.naturalWidth;
+  canvas.height = sourceImage.naturalHeight;
+
+  const ctx = canvas.getContext("2d", {
+    willReadFrequently: true
+  });
+
+  ctx.drawImage(sourceImage, 0, 0);
+
+  const width = canvas.width;
+  const height = canvas.height;
+
+  const imageData = ctx.getImageData(
+    0, 0, width, height
+  );
+
+  const pixels = imageData.data;
+  const count = width * height;
+
+  /*
+    取四個角落的小區域，估計背景顏色。
+    適合積木放在純色背景板上的情況。
+  */
+
+  const samples = [];
+
+  const margin = Math.max(
+    2,
+    Math.floor(Math.min(width, height) * 0.025)
+  );
+
+  const sampleCorner = (startX, startY) => {
+    for (let y = startY; y < startY + margin; y += 2) {
+      for (let x = startX; x < startX + margin; x += 2) {
+        const index = (y * width + x) * 4;
+
+        samples.push([
+          pixels[index],
+          pixels[index + 1],
+          pixels[index + 2]
+        ]);
+      }
+    }
+  };
+
+  sampleCorner(0, 0);
+  sampleCorner(width - margin, 0);
+  sampleCorner(0, height - margin);
+  sampleCorner(width - margin, height - margin);
+
+  if (!samples.length) {
+    throw new Error("無法取得背景顏色");
+  }
+
+  /*
+    使用平均顏色，延續一評的快速去背原理。
+  */
+
+  let backgroundR = 0;
+  let backgroundG = 0;
+  let backgroundB = 0;
+
+  for (const sample of samples) {
+    backgroundR += sample[0];
+    backgroundG += sample[1];
+    backgroundB += sample[2];
+  }
+
+  backgroundR /= samples.length;
+  backgroundG /= samples.length;
+  backgroundB /= samples.length;
+
+  /*
+    與一評相同的平方色差門檻 4900。
+    只刪除從照片邊緣連通的相似背景。
+  */
+
+  const thresholdSquared = 4900;
+
+  const visited = new Uint8Array(count);
+  const queue = new Int32Array(count);
+
+  let head = 0;
+  let tail = 0;
+
+  function isBackground(pixelIndex) {
+    const offset = pixelIndex * 4;
+
+    const dr = pixels[offset] - backgroundR;
+    const dg = pixels[offset + 1] - backgroundG;
+    const db = pixels[offset + 2] - backgroundB;
+
+    return (
+      dr * dr +
+      dg * dg +
+      db * db
+    ) <= thresholdSquared;
+  }
+
+  function enqueue(pixelIndex) {
+    if (visited[pixelIndex]) return;
+
+    visited[pixelIndex] = 1;
+
+    if (!isBackground(pixelIndex)) return;
+
+    queue[tail++] = pixelIndex;
+  }
+
+  // 從四周邊界開始尋找背景。
+  for (let x = 0; x < width; x++) {
+    enqueue(x);
+    enqueue((height - 1) * width + x);
+  }
+
+  for (let y = 0; y < height; y++) {
+    enqueue(y * width);
+    enqueue(y * width + width - 1);
+  }
+
+  while (head < tail) {
+    const position = queue[head++];
+
+    const x = position % width;
+    const y = Math.floor(position / width);
+
+    const offset = position * 4;
+
+    // 背景變成透明。
+    pixels[offset + 3] = 0;
+
+    if (x > 0) {
+      enqueue(position - 1);
+    }
+
+    if (x < width - 1) {
+      enqueue(position + 1);
+    }
+
+    if (y > 0) {
+      enqueue(position - width);
+    }
+
+    if (y < height - 1) {
+      enqueue(position + width);
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  return {
+    canvas,
+    removedPixels: tail,
+    totalPixels: count,
+    backgroundColor: [
+      Math.round(backgroundR),
+      Math.round(backgroundG),
+      Math.round(backgroundB)
+    ]
+  };
+}
+
+
+/* =====================================================
+   快速去背按鈕
+===================================================== */
+
+$("removeBgFast").onclick = async () => {
+  if (processing || !currentPhoto) return;
+
+  processing = true;
+
+  const button = $("removeBgFast");
+  const aiButton = $("removeBgAI");
+
+  button.disabled = true;
+  aiButton.disabled = true;
+
+  button.textContent = "⚡ 快速去背中……";
+
+  const start = performance.now();
+
+  try {
+    const image = await loadImageElement(currentPhoto);
+
+    const result = fastRemoveBackground(image);
+
+    applyCutoutCanvas(result.canvas);
+
+    const seconds =
+      (performance.now() - start) / 1000;
+
+    const removedPercent =
+      result.removedPixels /
+      result.totalPixels * 100;
+
+    $("editorMessage").textContent =
+      "⚡ 快速去背完成！\n" +
+      "處理時間：" + seconds.toFixed(3) + " 秒\n" +
+      "透明背景比例：" +
+      removedPercent.toFixed(1) + "%\n\n" +
+      "現在可以使用橡皮擦與恢復筆刷修圖。\n" +
+      "若去背不準確，可以改按 OpenAI 精細去背。";
+
+    console.log(
+      "[Mindspace 快速去背]",
+      {
+        seconds: +seconds.toFixed(3),
+        removedPercent:
+          +removedPercent.toFixed(1),
+        backgroundColor:
+          result.backgroundColor
+      }
+    );
+
+  } catch (error) {
+    $("editorMessage").textContent =
+      "快速去背失敗：" + error.message;
+
+    console.error(error);
+
+  } finally {
+    processing = false;
+
+    button.disabled = false;
+    aiButton.disabled = false;
+
+    button.textContent =
+      "⚡ 重新快速去背";
+  }
+};
+
+
+/* =====================================================
+   OpenAI 精細去背
+   完整保留原本的 API 與測速功能
+===================================================== */
+
+$("removeBgAI").onclick = async () => {
+  if (processing || !currentPhoto) return;
 
   processing = true;
 
   const button = $("removeBgAI");
+  const fastButton = $("removeBgFast");
 
   button.disabled = true;
+  fastButton.disabled = true;
+
   button.textContent = "AI 去背處理中……";
 
   $("editorMessage").textContent =
-    "正在進行 AI 去背並測量耗時……";
+    "正在進行 OpenAI 精細去背並測量耗時……";
 
   const totalStart = performance.now();
 
@@ -1457,41 +1770,20 @@ $("removeBgAI").onclick = async () => {
       response.image
     );
 
-    originalCutout = image;
+    const resultCanvas =
+      document.createElement("canvas");
 
-    editCanvas.width = image.naturalWidth;
-    editCanvas.height = image.naturalHeight;
+    resultCanvas.width = image.naturalWidth;
+    resultCanvas.height = image.naturalHeight;
 
-    editCtx.clearRect(
-      0,
-      0,
-      editCanvas.width,
-      editCanvas.height
+    resultCanvas.getContext("2d").drawImage(
+      image, 0, 0
     );
 
-    editCtx.drawImage(
-      image,
-      0,
-      0,
-      editCanvas.width,
-      editCanvas.height
-    );
+    applyCutoutCanvas(resultCanvas);
 
     imageLoadSeconds =
       (performance.now() - imageStart) / 1000;
-
-    editReady = true;
-    editMode = "erase";
-
-    setActiveTool();
-
-    editHistory = [];
-    editHistoryIndex = -1;
-
-    saveHistory();
-
-    $("editTools").classList.remove("hidden");
-    button.classList.add("hidden");
 
     const totalSeconds =
       (performance.now() - totalStart) / 1000;
@@ -1504,7 +1796,10 @@ $("removeBgAI").onclick = async () => {
 
     const bridgeOverheadSeconds =
       backendTiming
-        ? Math.max(0, bridgeSeconds - backendSeconds)
+        ? Math.max(
+            0,
+            bridgeSeconds - backendSeconds
+          )
         : null;
 
     const photoTiming =
@@ -1537,14 +1832,19 @@ $("removeBgAI").onclick = async () => {
 
     console.table(report);
 
-    const timeText = [
-      "AI 去背完成！現在可以修正圖片。",
+    $("editorMessage").style.whiteSpace =
+      "pre-line";
+
+    $("editorMessage").textContent = [
+      "✨ AI 精細去背完成！",
+      "現在可以修正圖片。",
       "",
       "📊 本次去背測速",
       "圖片尺寸：" +
         (report.photoWidth || "?") + " × " +
         (report.photoHeight || "?"),
-      "圖片大小：約 " + report.photoKB + " KB",
+      "圖片大小：約 " +
+        report.photoKB + " KB",
       "圖片準備：" +
         report.photoPrepareSeconds + " 秒",
       "Bridge 往返：" +
@@ -1559,12 +1859,6 @@ $("removeBgAI").onclick = async () => {
         report.totalRemoveBgSeconds + " 秒"
     ].join("\n");
 
-    $("editorMessage").style.whiteSpace =
-      "pre-line";
-
-    $("editorMessage").textContent =
-      timeText;
-
     console.log(
       "[Mindspace 去背測速] 完整結果",
       report
@@ -1575,7 +1869,7 @@ $("removeBgAI").onclick = async () => {
       (performance.now() - totalStart) / 1000;
 
     $("editorMessage").textContent =
-      "去背未完成：" + error.message +
+      "AI 去背未完成：" + error.message +
       "\n已耗時：" + elapsed.toFixed(2) + " 秒";
 
     console.error(
@@ -1588,11 +1882,14 @@ $("removeBgAI").onclick = async () => {
 
   } finally {
     processing = false;
+
     button.disabled = false;
-    button.textContent = "開始 AI 去背";
+    fastButton.disabled = false;
+
+    button.textContent =
+      "✨ OpenAI 精細去背";
   }
 };
-
 
 /* =====================================================
    07｜手動橡皮擦、恢復、復原
