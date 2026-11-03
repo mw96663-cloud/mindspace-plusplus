@@ -1948,7 +1948,95 @@ $("analyzeCreationAI").onclick = async () => {
    Environment：以孩子原始積木 PNG
    進行真正的 AI 圖像延伸
 ===================================================== */
+/* =====================================================
+   MINDSPACE V6｜漸進式背景合成
+===================================================== */
 
+const mindspaceV6EnvironmentHistory = [];
+
+function mindspaceV6LoadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+
+    img.onload = () => resolve(img);
+
+    img.onerror = () => reject(
+      new Error("V6 圖片載入失敗")
+    );
+
+    img.src = src;
+  });
+}
+
+async function mindspaceV6ComposeEnvironment(
+  currentBackground,
+  environmentImage
+) {
+  if (!currentBackground) {
+    return environmentImage;
+  }
+
+  const [backgroundImg, environmentImg] =
+    await Promise.all([
+      mindspaceV6LoadImage(currentBackground),
+      mindspaceV6LoadImage(environmentImage)
+    ]);
+
+  const canvas =
+    document.createElement("canvas");
+
+  canvas.width = 1536;
+  canvas.height = 1024;
+
+  const ctx = canvas.getContext("2d");
+
+  // 保留舊背景作為生成參考。
+  const bgScale = Math.max(
+    canvas.width / backgroundImg.width,
+    canvas.height / backgroundImg.height
+  );
+
+  const bgW = backgroundImg.width * bgScale;
+  const bgH = backgroundImg.height * bgScale;
+
+  ctx.drawImage(
+    backgroundImg,
+    (canvas.width - bgW) / 2,
+    (canvas.height - bgH) / 2,
+    bgW,
+    bgH
+  );
+
+  // 將新掃描的環境放在畫面右側，
+  // 作為 AI 要加入的物件參考。
+  const scale = Math.min(
+    340 / environmentImg.width,
+    340 / environmentImg.height
+  );
+
+  const w = environmentImg.width * scale;
+  const h = environmentImg.height * scale;
+
+  const x = canvas.width * 0.72 - w / 2;
+  const y = canvas.height * 0.70 - h / 2;
+
+  ctx.save();
+
+  ctx.shadowColor = "rgba(0,0,0,0.15)";
+  ctx.shadowBlur = 18;
+
+  ctx.drawImage(
+    environmentImg,
+    x,
+    y,
+    w,
+    h
+  );
+
+  ctx.restore();
+
+  return canvas.toDataURL("image/png");
+}
 let environmentExpansionBusy = false;
 
 $("confirmClassification").onclick = async () => {
@@ -2096,18 +2184,33 @@ $("confirmClassification").onclick = async () => {
   );
 
   try {
-    const result = await requestAI(
-      "generateEnvironmentExpansionAI",
-      {
-        image: creationImage,
-        description,
-        identity,
-        theme,
-        worldType,
-        elements
-      },
-      180000
-    );
+    const currentBackground =
+  window.getMindspaceAIBackgroundImage?.() || "";
+
+const compositeImage =
+  await mindspaceV6ComposeEnvironment(
+    currentBackground,
+    creationImage
+  );
+
+const result = await requestAI(
+  "generateEnvironmentExpansionAI",
+  {
+    image: creationImage,
+    compositeImage: compositeImage,
+    currentBackground: currentBackground
+      ? "existing-background-provided"
+      : "",
+    description,
+    identity,
+    theme,
+    worldType,
+    elements,
+    existingElements:
+      mindspaceV6EnvironmentHistory.slice()
+  },
+  180000
+);
 
     if (
       !result ||
@@ -2147,7 +2250,7 @@ $("confirmClassification").onclick = async () => {
       window.hideMindspaceEnvironmentOriginal?.(
         creationId
       );
-
+mindspaceV6EnvironmentHistory.push(identity);
     console.log(
       "[Mindspace] 環境原始照片隱藏結果",
       {
@@ -2228,9 +2331,12 @@ $("clearWorld").onclick = () => {
     return;
   }
 
-  window.clearMindspaceWorld?.();
+ window.clearMindspaceWorld?.();
 
-  updateCommandSelection();
+// V6｜清空世界時，同步清除環境歷史紀錄
+mindspaceV6EnvironmentHistory.length = 0;
+
+updateCommandSelection();
 
   setCommandStatus(
     "世界已清空，可以開始新的創作。"
@@ -3141,16 +3247,20 @@ connectBridge();
     );
 
     try {
-      const result = await requestAI(
-        "generateWorldBackgroundAI",
-        {
-          description: text,
-          theme: text,
-          worldType: "fantasy",
-          elements: []
-        },
-        180000
-      );
+      const currentBackground =
+  window.getMindspaceAIBackgroundImage?.() || "";
+
+const result = await requestAI(
+  "generateWorldBackgroundAI",
+  {
+    description: text,
+    theme: text,
+    worldType: "fantasy",
+    elements: [],
+    currentBackground: currentBackground
+  },
+  180000
+);
 
       if (
         !result ||
