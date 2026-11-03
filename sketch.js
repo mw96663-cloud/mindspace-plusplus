@@ -3244,15 +3244,15 @@ case "appearance": {
 (function () {
   "use strict";
 
-  const state = {
-    image: null,
-    description: "",
-    loading: false,
-    generation: 0,
-    enabled: false,
-    error: null
-  };
-
+const state = {
+  image: null,
+  dataUrl: "",
+  description: "",
+  loading: false,
+  generation: 0,
+  enabled: false,
+  error: null
+};
   // 保存原本的背景繪製函式
   const originalDrawBackground = drawBackground;
 
@@ -3360,9 +3360,10 @@ case "appearance": {
               return;
             }
 
-            state.image = img;
-            state.description =
-              String(description || "");
+        state.image = img;
+state.dataUrl = imageData;
+state.description =
+  String(description || "");
 
             state.enabled = true;
             state.loading = false;
@@ -3431,7 +3432,13 @@ case "appearance": {
         error: state.error
       };
     };
-
+  // V6｜取得目前 AI 背景的原始圖片資料
+  window.getMindspaceAIBackgroundImage =
+    function () {
+      return state.enabled && state.dataUrl
+        ? state.dataUrl
+        : "";
+    };
   /*
    * 清空世界時同步清除背景。
    * 只有使用者主動清空才執行。
@@ -3443,7 +3450,8 @@ case "appearance": {
     window.clearMindspaceWorld = function (...args) {
       state.generation++;
       state.image = null;
-      state.description = "";
+state.dataUrl = "";
+state.description = "";
       state.loading = false;
       state.enabled = false;
       state.error = null;
