@@ -902,9 +902,9 @@ window.addMindspaceCreation = function(dataURL) {
 
       img => {
         const maxSize = min(
-          width * .405,
-          height * .51,
-          390
+          width * .486,
+          height * .612,
+          468
         );
 
         const scale = min(
