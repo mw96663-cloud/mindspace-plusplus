@@ -4158,10 +4158,10 @@ state.description = "";
   ----------------------------------------------------- */
 
   drawCreation = function (item) {
-    const direction =
-      Number(item.aiDirection) < 0
-        ? -1
-        : 1;
+  const direction =
+    Number(item.aiDirection) < 0
+      ? 1
+      : -1;
 
     const features =
       Array.isArray(
