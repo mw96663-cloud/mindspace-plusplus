@@ -902,14 +902,14 @@ window.addMindspaceCreation = function(dataURL) {
 
       img => {
       // 判斷目前螢幕方向
+// Mindspace｜橫式與 9:16 直式螢幕自適應
 const isPortrait = height > width;
 
-// 根據螢幕方向決定角色最大尺寸
 const maxSize = isPortrait
   ? min(
-      width * 0.42,
-      height * 0.28,
-      280
+      width * 0.35,
+      height * 0.24,
+      320
     )
   : min(
       width * 0.486,
