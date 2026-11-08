@@ -406,6 +406,168 @@ section h2 {
     padding: 14px;
   }
 }
+  
+/* ==========================================
+   Mindspace｜9:16 直式全螢幕展示
+   不允許整頁水平或垂直捲動
+========================================== */
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+#scene canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 四個主要操作按鈕固定在右下角 */
+#floatingControls {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 20;
+}
+
+.floatButton {
+  width: clamp(48px, 6vw, 66px);
+  height: clamp(48px, 6vw, 66px);
+  font-size: clamp(21px, 2.8vw, 29px);
+  flex-shrink: 0;
+}
+
+/* 上方提示文字 */
+#speechBubble {
+  top: 14px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  font-size: clamp(12px, 1.5vw, 16px);
+}
+
+/* 工作台不再超出畫面 */
+#sidebar {
+  width: min(100vw, 760px);
+  height: 100dvh;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+
+.sidebarHeader {
+  flex-shrink: 0;
+  padding: 12px 16px;
+}
+
+.sidebarBody {
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+}
+
+.sidebarBody section {
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #e7edf4;
+  border-radius: 14px;
+}
+
+.sidebarBody section h2 {
+  margin-bottom: 7px;
+  font-size: clamp(12px, 1.4vw, 16px);
+}
+
+.sidebarBody .action {
+  padding: 9px;
+  margin: 3px 0;
+  font-size: clamp(11px, 1.2vw, 14px);
+}
+
+.sidebarBody .muted {
+  font-size: clamp(11px, 1.1vw, 13px);
+}
+
+#chatInput {
+  min-height: 58px;
+  resize: none;
+}
+
+/* 所有操作視窗保持在螢幕內 */
+.modal {
+  width: 100vw;
+  height: 100dvh;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.modalCard {
+  width: min(92vw, 700px);
+  max-height: calc(100dvh - 24px);
+  padding: 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+#cameraVideo {
+  max-height: 40dvh;
+}
+
+#editArea {
+  height: min(34dvh, 420px);
+}
+
+#classificationPreview {
+  height: min(18dvh, 220px);
+}
+
+/* 較窄的直式裝置改成單欄工作台 */
+@media (max-width: 700px) {
+  #sidebar {
+    width: 100vw;
+  }
+
+  .sidebarBody {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .modalCard {
+    width: 100%;
+    padding: 12px;
+  }
+
+  #floatingControls {
+    right: 12px;
+    bottom: 12px;
+  }
+}
+
 </style>
 </head>
 
