@@ -89,12 +89,13 @@ const WORLD_STYLES = {
    01｜初始化
 ===================================== */
 
-const scene = document.getElementById("scene");
+function setup() {
+  const scene = document.getElementById("scene");
 
-const canvas = createCanvas(
-  scene.clientWidth,
-  scene.clientHeight
-);
+  const canvas = createCanvas(
+    scene.clientWidth,
+    scene.clientHeight
+  );
 
   canvas.parent("scene");
 
@@ -902,26 +903,20 @@ window.addMindspaceCreation = function(dataURL) {
       dataURL,
 
       img => {
-      // 判斷目前螢幕方向
-// Mindspace｜橫式與 9:16 直式螢幕自適應
-const isPortrait = height > width;
+             // Mindspace｜橫式與 9:16 直式螢幕自適應
+        const isPortrait = height > width;
 
-const maxSize = isPortrait
-  ? min(
-      width * 0.35,
-      heconst isPortrait = height > width;
-
-const maxSize = isPortrait
-  ? min(
-      width * 0.18,
-      height * 0.15,
-      190
-    )
-  : min(
-      width * 0.486,
-      height * 0.612,
-      468
-    );
+        const maxSize = isPortrait
+          ? min(
+              width * 0.18,
+              height * 0.15,
+              190
+            )
+          : min(
+              width * 0.486,
+              height * 0.612,
+              468
+            );
 
         const scale = min(
           maxSize / img.width,
@@ -1669,12 +1664,13 @@ window.clearMindspaceWorld = function() {
 /* =====================================
    16｜視窗尺寸
 ===================================== */
-const scene = document.getElementById("scene");
+function windowResized() {
+  const scene = document.getElementById("scene");
 
-resizeCanvas(
-  scene.clientWidth,
-  scene.clientHeight
-);
+  resizeCanvas(
+    scene.clientWidth,
+    scene.clientHeight
+  );
 
   for (const item of creations) {
     item.x = constrain(
