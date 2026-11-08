@@ -89,11 +89,12 @@ const WORLD_STYLES = {
    01｜初始化
 ===================================== */
 
-function setup() {
-  const canvas = createCanvas(
-    windowWidth,
-    windowHeight
-  );
+const scene = document.getElementById("scene");
+
+const canvas = createCanvas(
+  scene.clientWidth,
+  scene.clientHeight
+);
 
   canvas.parent("scene");
 
