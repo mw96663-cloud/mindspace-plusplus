@@ -1664,12 +1664,12 @@ window.clearMindspaceWorld = function() {
 /* =====================================
    16｜視窗尺寸
 ===================================== */
+const scene = document.getElementById("scene");
 
-function windowResized() {
-  resizeCanvas(
-    windowWidth,
-    windowHeight
-  );
+resizeCanvas(
+  scene.clientWidth,
+  scene.clientHeight
+);
 
   for (const item of creations) {
     item.x = constrain(
