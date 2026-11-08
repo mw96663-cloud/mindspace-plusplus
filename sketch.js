@@ -901,11 +901,21 @@ window.addMindspaceCreation = function(dataURL) {
       dataURL,
 
       img => {
-        const maxSize = min(
-          width * .486,
-          height * .612,
-          468
-        );
+      // 判斷目前螢幕方向
+const isPortrait = height > width;
+
+// 根據螢幕方向決定角色最大尺寸
+const maxSize = isPortrait
+  ? min(
+      width * 0.42,
+      height * 0.28,
+      280
+    )
+  : min(
+      width * 0.486,
+      height * 0.612,
+      468
+    );
 
         const scale = min(
           maxSize / img.width,
