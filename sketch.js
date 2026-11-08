@@ -909,8 +909,13 @@ const isPortrait = height > width;
 const maxSize = isPortrait
   ? min(
       width * 0.35,
-      height * 0.24,
-      320
+      heconst isPortrait = height > width;
+
+const maxSize = isPortrait
+  ? min(
+      width * 0.18,
+      height * 0.15,
+      190
     )
   : min(
       width * 0.486,
